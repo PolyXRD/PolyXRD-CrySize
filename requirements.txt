@@ -1,0 +1,8 @@
+# PolyXRD CrySize 运行依赖（环境 D:/Project/XRD/python310 已预装，此文件用于锁定与 CI）
+# 版本取自家族统一环境实测（numpy 2.x 下 ndarray.ptp() 已移除，代码已适配）
+numpy==2.2.6
+scipy==1.15.3
+matplotlib==3.10.9
+PySide6==6.11.2
+Pillow==12.3.0
+pytest>=8.0

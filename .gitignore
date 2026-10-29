@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+installer_output/
+tests/out/
+*.egg-info/
+
+# 会话工作记忆、冒烟截图与生成报告不入库
+.workbuddy/
+.tmp/
+_smoke*/

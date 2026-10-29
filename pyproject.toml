@@ -1,0 +1,104 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "polyxrd-crysize"
+# 版本号单一来源：crysize/version.py 的 __version__
+dynamic = ["version"]
+description = "XRD 峰宽分析：谢乐法与 Williamson-Hall 法晶粒尺寸、微应变计算"
+readme = "README.md"
+# 双许可 (学术免费 / 商业需单独书面授权): SPDX 无对应标准标识符,
+# 按 PEP 639 用 LicenseRef-, 条款正文见 LICENSE (英文) 与 LICENSE-CN (中文)。
+license = "LicenseRef-PolyXRD-Academic-Dual"
+license-files = ["LICENSE", "LICENSE-CN"]
+requires-python = ">=3.10"
+authors = [
+    {name = "PolyXRD Team", email = "sshztx@outlook.com"},
+]
+keywords = [
+    "XRD",
+    "X-ray diffraction",
+    "Scherrer equation",
+    "Williamson-Hall",
+    "crystallite size",
+    "microstrain",
+    "peak broadening",
+    "line profile analysis",
+    "instrumental resolution",
+    "materials science",
+    "scientific computing",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Win32 (MS Windows)",
+    "Intended Audience :: Science/Research",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: Scientific/Engineering :: Visualization",
+]
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "PySide6>=6.5",
+    "matplotlib>=3.7",
+    "Pillow>=10.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/PolyXRD/PolyXRD-CrySize"
+Repository = "https://github.com/PolyXRD/PolyXRD-CrySize"
+Documentation = "https://github.com/PolyXRD/PolyXRD-CrySize/blob/main/README.md"
+Issues = "https://github.com/PolyXRD/PolyXRD-CrySize/issues"
+Releases = "https://github.com/PolyXRD/PolyXRD-CrySize/releases"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=4.0",
+    "pyinstaller>=6.0",
+    "ruff>=0.6.0",
+]
+
+[project.scripts]
+crysize = "crysize.gui.__main__:main"
+
+[project.gui-scripts]
+crysize-gui = "crysize.gui.__main__:main"
+
+[tool.setuptools.dynamic]
+version = {attr = "crysize.version.__version__"}
+
+# 源码树布局为项目根下的 crysize/（与家族 PolyXRD-RutAna 一致，不用 src/）。
+# 品牌资源 resources/ 位于项目根、由 tools/build_artwork.py 生成，运行时经
+# crysize.gui.resources 按 sys._MEIPASS / 项目根定位；分发包统一走 PyInstaller
+# （PolyXRD-CrySize.spec 的 datas），故不纳入 wheel 包数据。
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["crysize*"]
+
+[tool.setuptools]
+include-package-data = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
+
+[tool.coverage.run]
+source = ["crysize"]
+omit = ["tests/*", "tools/*"]
+
+[tool.coverage.report]
+show_missing = true
+
+# ruff 静态门禁与家族 PolyXRD 主程序一致：
+# F821 未定义名 / F601 字面字典重复键 / RUF012 类属性可变默认值。
+[tool.ruff.lint]
+select = ["F821", "F601", "RUF012"]
