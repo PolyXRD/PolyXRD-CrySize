@@ -5,6 +5,7 @@ REM      -> dist\PolyXRD-CrySize\PolyXRD-CrySize.exe (+ support files)
 REM   2. Inno Setup installer from installer\PolyXRD-CrySize.iss
 REM      -> dist\PolyXRD-CrySize-vX.Y.Z-Setup.exe
 REM Version is read from crysize/version.py (single source of truth).
+REM Ends with tidy_dist.bat: dist\ keeps only the two deliverables.
 REM NOTE: keep comments ASCII-only to stay safe under any cmd codepage.
 cd /d %~dp0
 set PY=D:\Project\XRD\python310\python.exe
@@ -23,10 +24,11 @@ echo [2/2] Building installer with Inno Setup ...
 "%ISCC%" /DAPP_VER=v%VER% installer\PolyXRD-CrySize.iss
 if errorlevel 1 goto :fail
 
+call tidy_dist.bat
 echo.
 echo Done:
-echo   dist\PolyXRD-CrySize\PolyXRD-CrySize.exe          (onedir, registered edition)
-echo   dist\PolyXRD-CrySize-v%VER%-Setup.exe
+echo   dist\PolyXRD-CrySize-v%VER%.exe                  (internal evaluation edition)
+echo   dist\PolyXRD-CrySize-v%VER%-Setup.exe            (registered installer)
 exit /b 0
 
 :fail
