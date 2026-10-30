@@ -9,8 +9,9 @@ XRD 粉末衍射谱的**晶粒尺寸**与**微应变**分析工具。导入样�
 | 标签 | 方法 | 输出 |
 |---|---|---|
 | ① 谢乐法 | D = K·λ/(β·cosθ)，逐峰计算 | 各峰 D、平均 D（三种统计口径） |
-| ② Williamson-Hall | β·cosθ = Kλ/D + 4ε·sinθ 线性拟合 | 截距→D、斜率→ε、R² |
+| ② Williamson-Hall | UDM / USDM / UDEDM 三变体可切换 | 截距→D、斜率→ε/σ/√u、R² |
 | ③ 标样与仪器线宽 | Caglioti 分辨函数 | U/V/W、仪器线宽曲线、2θ 角度校正 |
+| ④ 方法对比 | 5 组 7 种方法横向对比 | 各方法 D、次级量、R²、状态与选型说明 |
 
 ## 运行
 
@@ -25,6 +26,30 @@ python -m crysize.gui
 界面与报告支持**三语**（简体中文 / English / 日本語），菜单「语言」运行时热切换，
 选择持久化到 `%USERPROFILE%/.crysize/config.json`。漏译键以 `⟪key⟫` 直接上界面，
 `tests/test_i18n.py` 在上线前拦截三语 key 集与格式占位符的不一致。
+
+## 计算方法：5 组 7 种
+
+侧栏「计算方法」下拉可切换主方法，标签页「方法对比」给出 7 种方法在同一组
+峰拟合结果上的横向对比。完整选型说明见 [`docs/METHODS.md`](docs/METHODS.md)。
+
+| 组 | 细分方法（7 种） | 主输出 | 次级量 | 额外输入 |
+|---|---|---|---|---|
+| ① 谢乐法 | FWHM 口径（K=0.89）／积分宽度口径（K=1.0） | 数目平均 D | — | 标样（可选） |
+| ② W-H UDM | 均匀形变模型 | D | ε (%) | 标样（推荐） |
+| ③ W-H USDM | 均匀应力模型 | D | σ (MPa) | 标样 + a、c₁₁/c₁₂/c₄₄ |
+| ④ W-H UDEDM | 形变能密度模型 | D | u (MJ·m⁻³) | 同 ③ |
+| ⑤ Warren-Averbach | 单峰 Voigt 近似／多级反射傅里叶法 | D（体积加权） | ⟨ε²⟩^½ | 标样；傅里叶法还要 ≥3 峰且 d 值 ≥2 种 |
+
+「按晶向分组」是 ②③④ 共用的增强开关（按 Γ 分组后组内回归），需先填晶格
+参数完成指标化；若谱里没有同族高级次，程序自动退回不分组并注明。
+
+三条使用边界：
+
+1. **无弹性常数时 ②③④ 退化为同一条拟合线**（σ = εE、u = ε²E/2 只是重参数
+   化），界面标注「降级」。
+2. **口径不可混用**：谢乐两种口径 K 不同；单峰 W-A 与傅里叶 W-A 物理含义
+   不同；跨方法比数值大小没有意义。
+3. **无标样时**仪器宽化被计入尺寸，结果只作相对参考。
 
 ## 两个版次
 
@@ -147,6 +172,10 @@ crysize/
   i18n/           三语基础设施（manager + translations/zh_CN,en_US,ja_JP）
   core/
     pattern.py     谱图读取（表头跳过、元数据提取、降序翻转）
+    elasticity.py  立方晶系 hkl 指标化与方向杨氏模量 E(hkl)（USDM/UDEDM 用）
+    wh_models.py   W-H 三变体 UDM / USDM / UDEDM + 按 Γ 分组
+    warren.py      Warren-Averbach：单峰 Voigt 近似 + 多级反射傅里叶法
+    methods.py     5 组 7 种方法的注册表、统一结果与选型说明入口
     peaks.py       峰搜索与自动选峰
     profile.py     pseudo-Voigt 拟合（局部多峰、Kα₂ 剥离、质量标记）
     instrument.py  仪器分辨函数（Caglioti / PCHIP）
@@ -165,6 +194,8 @@ resources/         品牌资产（build_artwork.py 生成）
 installer/         Inno Setup 脚本、中文语言文件、内部版 runtime hook
 tools/             build_artwork.py、smoke_gui.py、shot_report.py
 tests/             test_core.py（算法闭环）+ test_i18n.py（三语一致性）
+                   + test_methods.py（弹性/指标化、三变体、Warren-Averbach）
+docs/              METHODS.md（5 组 7 种方法的选择场景与文献依据）
 pyproject.toml     打包元数据（双许可 LicenseRef、版本单一来源、pytest/ruff 配置）
 PolyXRD-CrySize.spec / PolyXRD-CrySize-Setup.spec   PyInstaller 内部版 / 注册版
 build_exe.bat / build_setup.bat                    一键打包脚本
@@ -181,6 +212,13 @@ build_exe.bat / build_setup.bat                    一键打包脚本
 - Caglioti, G.; Paoletti, A.; Ricci, F. P. *Nucl. Instr.* **3** (1958) 223
 - Stokes, A. R. *Proc. Phys. Soc. A* **61** (1948) 382
 - Langford, J. I.; Wilson, A. J. C. *J. Appl. Cryst.* **11** (1978) 102
+- Warren, B. E.; Averbach, B. L. *J. Appl. Phys.* **21** (1950) 595
+- de Keijser, Th. H.; Langford, J. I.; Mittemeijer, E. J.; Vogels, A. B. P.
+  *J. Appl. Cryst.* **15** (1982) 308
+- Noyan, I. C.; Cohen, J. B. *Residual Stress: Measurement by Diffraction and
+  Interpretation*, Springer (1987)
+- Nye, J. F. *Physical Properties of Crystals*, Clarendon Press (1957)
+- Bindu, P.; Thomas, S. *J. Theor. Appl. Phys.* **8** (2014) 123
 
 ## 许可与联系
 

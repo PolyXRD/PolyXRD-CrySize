@@ -28,6 +28,9 @@ OK_GREEN = "#15803D"
 WARN_AMBER = "#B45309"
 ERR_RED = "#B91C1C"
 
+#: 内部评估版徽章色（红-600，与出错态 ERR_RED 区分开，避免语义混淆）
+EDITION_RED = "#DC2626"
+
 #: 特性 chip（关于对话框，家族统一的青色药丸样式）
 CHIP_BG = "#ECFEFF"
 CHIP_BORDER = "#CFFAFE"

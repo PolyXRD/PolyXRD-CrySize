@@ -10,7 +10,9 @@ from dataclasses import dataclass, field, replace
 
 import numpy as np
 
+from crysize.core.elasticity import ElasticParams
 from crysize.core.instrument import InstrumentModel, build_instrument_model
+from crysize.core.methods import MethodOutcome, evaluate_all
 from crysize.core.pattern import KA2, Pattern
 from crysize.core.peaks import PeakCandidate, auto_select, find_candidates
 from crysize.core.profile import PeakFit, fit_region
@@ -33,6 +35,10 @@ class AnalysisConfig:
     standard_positions: list[float] = field(default_factory=list)  # 空 → 自动找峰
     standard_window: float = 2.0
     zero_shift: float | None = None  # None → 自动由标样估计；数值则强制使用
+    # --- v2.0.0：计算方法体系（5 组 7 种）---
+    method: str = "scherrer_fwhm"          # 当前主方法，见 methods.METHOD_IDS
+    group_by_direction: bool = False       # ②③④ 的"按晶向分组"增强开关
+    elastic: ElasticParams | None = None   # 立方物相晶格参数 + 弹性常数
 
     def effective_K(self) -> float:
         if self.K:
@@ -50,13 +56,26 @@ class AnalysisBundle:
     wh: WHResult
     config: AnalysisConfig
     candidates: list[PeakCandidate] = field(default_factory=list)
+    outcomes: dict[str, MethodOutcome] = field(default_factory=dict)
 
     @property
     def corrected(self) -> bool:
         return self.instrument is not None and self.instrument.usable
 
+    @property
+    def active_method(self) -> str:
+        return self.config.method
+
+    def active(self) -> MethodOutcome | None:
+        """当前主方法的结果。"""
+        return self.outcomes.get(self.config.method)
+
     def warnings(self) -> list[str]:
-        return list(dict.fromkeys(self.scherrer.warnings + self.wh.warnings))
+        base = list(self.scherrer.warnings + self.wh.warnings)
+        act = self.active()
+        if act is not None:
+            base += act.warnings
+        return list(dict.fromkeys(base))
 
 
 def fit_window(fwhm_est: float, window_max: float) -> float:
@@ -158,10 +177,14 @@ def run_analysis(
         width_mode=cfg.width_mode, K=cfg.effective_K(),
     )
     wh = compute_wh(fits, wavelength=sample.wavelength, instrument=instrument)
+    outcomes = evaluate_all(fits, wavelength=sample.wavelength, instrument=instrument,
+                            elastic=cfg.elastic,
+                            group_by_direction=cfg.group_by_direction)
 
     return AnalysisBundle(
         sample=sample_used, standard=standard, fits=fits, instrument=instrument,
         scherrer=scherrer, wh=wh, config=cfg, candidates=candidates,
+        outcomes=outcomes,
     )
 
 
@@ -175,6 +198,9 @@ def refit_with_positions(
                                 instrument=bundle.instrument,
                                 width_mode=cfg.width_mode, K=cfg.effective_K())
     wh = compute_wh(fits, wavelength=bundle.sample.wavelength, instrument=bundle.instrument)
+    outcomes = evaluate_all(fits, wavelength=bundle.sample.wavelength,
+                            instrument=bundle.instrument, elastic=cfg.elastic,
+                            group_by_direction=cfg.group_by_direction)
     return AnalysisBundle(sample=bundle.sample, standard=bundle.standard, fits=fits,
                           instrument=bundle.instrument, scherrer=scherrer, wh=wh,
-                          config=cfg, candidates=bundle.candidates)
+                          config=cfg, candidates=bundle.candidates, outcomes=outcomes)

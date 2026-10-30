@@ -149,6 +149,7 @@ TRANSLATIONS = {
     "cv.wh_intercept": "切片 {xi:.3f}",
     "cv.wh_to_size": " rad → D = {d:.1f} nm",
     "cv.excluded": "除外：{peaks}（フィット品質不足）",
+    "cv.wh_groups": "方位群",
     "cv.std_meas": "標準試料 FWHM（実測）",
     "cv.std_model": "モデル（{m}）",
     "cv.model_caglioti": "Caglioti U/V/W",
@@ -409,6 +410,148 @@ K は形状因子：FWHM 使用時は K≈0.89（球形結晶子）、積分幅�
 
     "rep.foot_note": "本レポートは上記ソフトウェアにより生成されました。本ソフトウェアはデュアルライセンスで"
                      "提供されます：アカデミックライセンスは非商用の学術研究・教育に限定され、商用利用には"
-                     "別途書面による許諾が必要です（添付の LICENSE / LICENSE-CN を参照）。アルゴリズムを"
-                     "引用する際は、シェラー式および Williamson–Hall 法の原典を明記してください。",
+                "別途書面による許諾が必要です（添付の LICENSE / LICENSE-CN を参照）。アルゴリズムを"
+                "引用する際は、シェラー式および Williamson–Hall 法の原典を明記してください。",
+
+    # ============ v2.0.0 計算手法体系：5 群 / 7 種 ============
+    "g.scherrer.name": "① シェラー法 Scherrer",
+    "g.udm.name": "② W-H 一様ひずみ UDM",
+    "g.usdm.name": "③ W-H 一様応力 USDM",
+    "g.udedm.name": "④ W-H ひずみエネルギー密度 UDEDM",
+    "g.warren.name": "⑤ Warren–Averbach",
+
+    "m.scherrer_fwhm.name": "シェラー法（FWHM 基準、K=0.89）",
+    "m.scherrer_fwhm.assume": "広がりはすべて有限結晶子サイズに由来するとし、各成分はガウス近似"
+                              "（装置幅は平方差で除去）。",
+    "m.scherrer_fwhm.need": "試料パターンのみで算出可；定量には同条件の標準試料が必要。",
+    "m.scherrer_fwhm.scene": "サイズとひずみを分離せず、粒径のオーダーだけ知りたい通常スクリーニング。",
+    "m.scherrer_fwhm.limit": "微小ひずみ・積層欠陥・残留装置幅がすべてサイズに算入され D は過小；"
+                             "D>100 nm では定量性を失う。",
+
+    "m.scherrer_integral.name": "シェラー法（積分幅基準、K=1.0）",
+    "m.scherrer_integral.assume": "同上だが積分幅を使用；積分幅は畳み込み下で厳密に加算される"
+                                  "（Stokes 1948）。",
+    "m.scherrer_integral.need": "同上；プロファイルが強いローレンツ型のとき FWHM より安定。",
+    "m.scherrer_integral.scene": "裾引きが明確なピーク（η 大）、または W-H・W-A と同じ基準で比較するとき。",
+    "m.scherrer_integral.limit": "同左；窓内の隣接ピーク残差に敏感で、重なりピークでは過大になりやすい。",
+
+    "m.wh_udm.name": "W-H 一様ひずみモデル（UDM）",
+    "m.wh_udm.assume": "微小ひずみは全方向で等しい（等方一様ひずみ）；β·cosθ は 4sinθ に線形。",
+    "m.wh_udm.need": "有効ピーク ≥2；標準試料の併用を強く推奨（否則装置幅がサイズに混入）。",
+    "m.wh_udm.scene": "サイズ D と微小ひずみ ε を分離する標準的な場面；3 変体中で入力要件が最小。",
+    "m.wh_udm.limit": "異方性試料では直線性が悪化（R² 低下）し、D と ε が相互に汚染される。",
+
+    "m.wh_usdm.name": "W-H 一様応力モデル（USDM）",
+    "m.wh_usdm.assume": "応力 σ は一様、ひずみは方位剛性で分配される（ε = σ/E(hkl)）。",
+    "m.wh_usdm.need": "立方晶の格子定数 a と弾性定数 c11/c12/c44（無ければ UDM に退化）。",
+    "m.wh_usdm.scene": "弾性異方性が顕著で応力型広がりが支配的な場合；UDM/UDEDM と R² を比較して選択。",
+    "m.wh_usdm.limit": "E(hkl) の精度に依存；a 値や格子種別の誤りは横軸全体を汚染する。",
+
+    "m.wh_udedm.name": "W-H ひずみエネルギー密度モデル（UDEDM）",
+    "m.wh_udedm.assume": "ひずみエネルギー密度 u = ε²E/2 が一様；傾きは √u を与える。",
+    "m.wh_udedm.need": "USDM と同じく a と c11/c12/c44；弾性データ無しでは UDM に退化。",
+    "m.wh_udedm.scene": "ナノ粉体で一般的；転位・界面エネルギー支配の変形では USDM より線形になりやすい。",
+    "m.wh_udedm.limit": "USDM と同様；エネルギー一様の仮定は緻密バルクでは必ずしも成立しない。",
+
+    "m.wa_single.name": "Warren–Averbach 単峰近似（Voigt 単線法）",
+    "m.wa_single.assume": "ローレンツ成分をサイズ広がり、ガウス成分をひずみ広がりに帰属（線形仮定）。",
+    "m.wa_single.need": "孤立単峰で可、高次反射は不要；標準試料は必要。",
+    "m.wa_single.scene": "同一族の高次反射が測れないがサイズ/ひずみ分離が欲しいときの妥協案。",
+    "m.wa_single.limit": "線形仮定に強く依存し、実際の線形からのずれで 20% 超の誤差もある；"
+                         "フーリエ法の値と混用不可。",
+
+    "m.wa_fourier.name": "Warren–Averbach 高次反射フーリエ法",
+    "m.wa_fourier.assume": "フーリエ空間でサイズ項 A^S(L) とひずみ項 A^D(L) を分離し、"
+                           "線形の重ね合わせを前提としない。",
+    "m.wa_fourier.need": "有効ピーク ≥3 かつ d 値が 2 種類以上（同一族の高次反射が最適）；標準試料は必須。",
+    "m.wa_fourier.scene": "データ品質が良く高次反射が測れる場合の最上位の選択；体積加重サイズと"
+                          "L 依存の二乗平均ひずみを与える。",
+    "m.wa_fourier.limit": "隣接ピーク・Kα₂ 残差・ノイズがフーリエ変換で増幅される；条件を満たさなければ不出力。",
+
+    "m.sec.strain": "微小ひずみ ε",
+    "m.sec.stress": "一様応力 σ",
+    "m.sec.energy": "ひずみエネルギー密度 u",
+    "m.reason.no_valid_peak": "有効ピーク無し",
+    "m.reason.too_few": "有効ピークが 2 未満",
+    "m.reason.degenerate": "弾性定数未提供のため UDM と同一の回帰に退化",
+    "m.reason.no_lattice": "結晶方位別解析には格子定数と指数付けの成功が必要",
+    "m.reason.wa_unmet": "フーリエ法のデータ条件を満たさない",
+    "m.reason.unknown": "未知の手法",
+    "m.head.assume": "物理的仮定",
+    "m.head.need": "入力要件",
+    "m.head.scene": "適用場面",
+    "m.head.limit": "限界",
+    "m.status.ok": "利用可",
+    "m.status.degraded": "退化",
+    "m.status.unavailable": "利用不可",
+
+    "whv.too_few": "有効ピークが 2 未満で回帰不能",
+    "whv.neg_slope": "傾きが負で、ひずみ項に物理的意味が無い",
+    "whv.low_r2": "直線性が不良（R²={r2:.3f}）。異方性や重なりピークを確認",
+    "whv.no_index": "指数付け失敗のため結晶方位別に分類できない",
+    "whv.group_single": "方位グループが 1 つのみで、未分割と等価",
+    "whv.group_fallback": "いずれの方位群も 2 峰に満たない（高次反射が不在）ため、未分割の回帰に戻しました",
+    "whv.degenerate": "E(hkl) が一定のため、本変体は UDM と代数的に同一",
+    "whv.no_elastic": "弾性定数が無く、横軸は 4sinθ に退化",
+    "whv.few": "回帰に参加したのは {n} 峰のみで信頼度は限定的",
+
+    "wa.excluded": "品質ゲートにより除外されたピーク",
+    "wa.no_standard": "装置広がりの補正なし",
+    "wa.need_standard": "標準試料未読込のため装置由来の広がりを含む",
+    "wa.single_note": "単峰近似は線形仮定に強く依存し、フーリエ法の結果とは比較できない",
+    "wa.fourier_need_peaks": "フーリエ法には有効ピーク ≥3 が必要（現在 {n}）",
+    "wa.fourier_need_orders": "フーリエ法には d 値が 2 種類以上必要（高次反射）",
+    "wa.fourier_need_std": "フーリエ法には Stokes デコンボリューション用の標準試料が必要",
+    "wa.fourier_window": "ピーク窓のフーリエ区間に共通部分が無い",
+    "wa.fourier_no_fit": "フーリエ係数の回帰が収束しなかった",
+    "wa.fourier_no_size": "A^S(L) の初期勾配からサイズを求められなかった",
+    "wa.fourier_out_of_range": "得られた D_v={d:.1f} nm はピーク幅法の信頼区間（0.5–500 nm）外です。参考値として扱ってください",
+    "wa.th_l": "L (Å)",
+    "wa.th_as": "A^S(L)",
+    "wa.th_eps": "⟨ε²⟩^½",
+
+    # GUI
+    "group.method": "計算手法",
+    "param.method": "主手法",
+    "param.group_dir": "結晶方位別に分類（異方性）",
+    "param.group_dir_tip": "Γ で分類し群内で回帰；格子定数と各群 ≥2 峰が必要",
+    "param.elastic": "物相の弾性パラメータ（USDM/UDEDM と分類で使用）",
+    "param.preset": "プリセット物相",
+    "param.preset_none": "カスタム / 無効",
+    "param.a": "格子定数 a",
+    "param.c11": "c₁₁",
+    "param.c12": "c₁₂",
+    "param.c44": "c₄₄",
+    "param.lattice": "格子種別",
+    "param.lattice_fcc": "面心 fcc",
+    "param.lattice_bcc": "体心 bcc",
+    "param.lattice_simple": "単純 simple",
+    "btn.method_guide": "手法選択ガイド",
+    "sum.method.head": "現在の主手法",
+    "sum.method.sec": "副次量",
+    "sum.method.state": "状態",
+    "tab.methods": "手法比較",
+    "method2.title": "手法選択ガイド（5 群・7 種）",
+    "method2.body": "① シェラー法：FWHM 基準 / 積分幅基準 —— 粒径のオーダーのみで良い場合に使用。"
+                    "微小ひずみはサイズに算入され D は過小となる。\n"
+                    "② UDM：サイズと微小ひずみを分離する標準的手法、入力要件は最小。\n"
+                    "③ USDM：応力一様、ひずみは方位剛性で分配。弾性定数が必要。\n"
+                    "④ UDEDM：ひずみエネルギー密度一様。ナノ粉体で一般的。弾性定数が必要。\n"
+                    "⑤ Warren–Averbach：単峰近似（高次反射不要、線形仮定に依存）；"
+                    "高次反射フーリエ法（有効ピーク ≥3 かつ d 値 ≥2 種、最も厳密）。\n\n"
+                    "弾性定数が無い場合 ②③④ は同一の回帰に退化する。結晶方位別分類は ②③④ の"
+                    "付加オプションで、指数付けのため格子定数が必要。",
+    "rep.h_method": "計算手法と横断比較",
+    "rep.m_sel": "本次の主手法",
+    "rep.m_table_cap": "表 5　7 種の手法の横断比較（同一のピークフィット結果に基づく）",
+    "rep.m_th_method": "手法",
+    "rep.m_th_group": "所属群",
+    "rep.m_th_size": "D (nm)",
+    "rep.m_th_sec": "副次量",
+    "rep.m_th_r2": "R²",
+    "rep.m_th_n": "有効峰",
+    "rep.m_th_status": "状態",
+    "rep.m_note": "各手法の D は意味が異なる（シェラーは個数平均、W-A フーリエは体積加重）。"
+                  "手法間で数値を直接比較しても意味はなく、同一手法内の整合性を比較すべきである。",
+    "csv.h_method": "手法",
 }

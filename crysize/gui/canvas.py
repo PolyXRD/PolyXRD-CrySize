@@ -11,6 +11,7 @@ from matplotlib.figure import Figure  # noqa: E402
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg  # noqa: E402
 
 from crysize.core.analysis import AnalysisBundle  # noqa: E402
+from crysize.core.wh_models import WHVariantFit  # noqa: E402
 from crysize.i18n import tr  # noqa: E402
 from crysize.gui.theme import BRAND, FAINT, INK, LINE, MUTED  # noqa: E402
 
@@ -164,12 +165,31 @@ class WHCanvas(_BaseCanvas):
             self.draw_idle()
             return
 
-        wh = bundle.wh
+        # v2.0.0：当前方法是 W-H 变体时，改用该变体的坐标系与分组结果
+        mid = bundle.config.method
+        outcome = bundle.outcomes.get(mid)
+        detail = getattr(outcome, "detail", None)
+        variant = detail if isinstance(detail, WHVariantFit) else None
+
+        if variant is not None and variant.points:
+            self._draw_variant(variant, mid)
+        else:
+            self._draw_classic(bundle.wh)
+
+        self.ax.set_ylabel(r"$\beta\cdot\cos\theta$  $(\times10^{-3}\ \mathrm{rad})$",
+                           fontsize=9.5, color=MUTED)
+        self.ax.set_xlim(left=0)
+        self.ax.legend(fontsize=8, frameon=False, loc="best")
+        self.draw_idle()
+
+    # ------------------------------------------------------------------
+    def _draw_classic(self, wh) -> None:
+        """经典 W-H（UDM）图。"""
         good = [p for p in wh.points if p.ok]
         bad = [p for p in wh.points if not p.ok]
         if good:
             gx = np.array([p.x for p in good])
-            gy = np.array([p.y for p in good]) * 1000.0  # 换算为 ×10⁻³ rad
+            gy = np.array([p.y for p in good]) * 1000.0
             self.ax.plot(gx, gy, "o", ms=7, color=BRAND, zorder=3, label=tr("cv.wh_points"))
             for p in good:
                 self.ax.annotate(f"{p.two_theta:.1f}°", xy=(p.x, p.y * 1000),
@@ -188,22 +208,54 @@ class WHCanvas(_BaseCanvas):
                     fontsize=8.5, color=ACCENT,
                     bbox=dict(fc="white", ec=ACCENT, lw=0.6, alpha=0.92, pad=2.5))
         if bad:
-            # 只写说明，不在图上画"假数据点"
             self.ax.text(0.985, 0.045,
                          tr("cv.excluded", peaks="、".join(f"{p.two_theta:.1f}°" for p in bad)),
                          transform=self.ax.transAxes, ha="right", va="bottom",
                          fontsize=7.8, color=BAND)
-
         self.ax.set_xlabel("4 sinθ", fontsize=9.5, color=MUTED)
-        self.ax.set_ylabel(r"$\beta\cdot\cos\theta$  $(\times10^{-3}\ \mathrm{rad})$",
-                           fontsize=9.5, color=MUTED)
         title = "Williamson-Hall 图"
         if np.isfinite(wh.r2):
             title += f"    ε = {wh.strain_pct:.3f}%    R² = {wh.r2:.3f}"
         self.ax.set_title(title, fontsize=10, color=INK, loc="left")
-        self.ax.set_xlim(left=0)
-        self.ax.legend(fontsize=8, frameon=False, loc="best")
-        self.draw_idle()
+
+    def _draw_variant(self, variant: WHVariantFit, mid: str) -> None:
+        """UDM/USDM/UDEDM 图；按晶向分组时逐组着色。"""
+        model = mid.split("_", 1)[1] if "_" in mid else "udm"
+        xlabel = {"udm": "4 sinθ",
+                  "usdm": r"$4\sin\theta\,/\,E_{hkl}$  (GPa$^{-1}$)",
+                  "udedm": r"$4\sin\theta\,\sqrt{2/E_{hkl}}$  (GPa$^{-1/2}$)"}.get(model, "4 sinθ")
+        self.ax.set_xlabel(xlabel, fontsize=9.5, color=MUTED)
+
+        palette = [BRAND, "#7C3AED", "#0891B2", "#B45309", "#15803D"]
+        groups = variant.groups or [variant]
+        for gi, g in enumerate(groups):
+            color = palette[gi % len(palette)]
+            pts = g.points if g.points else []
+            good = [p for p in pts if p.ok and np.isfinite(p.y)]
+            if not good:
+                continue
+            gx = np.array([p.x for p in good])
+            gy = np.array([p.y for p in good]) * 1000.0
+            tag = f"（{g.group_label}）" if g.group_label else ""
+            self.ax.plot(gx, gy, "o", ms=7, color=color, zorder=3,
+                         label=f"{tr('cv.wh_points')}{tag}")
+            for p in good:
+                self.ax.annotate(f"{p.two_theta:.1f}°", xy=(p.x, p.y * 1000),
+                                 xytext=(5, 5), textcoords="offset points",
+                                 fontsize=7.5, color=MUTED)
+            if np.isfinite(g.slope) and np.isfinite(g.intercept):
+                xs = np.linspace(min(gx.min() * 0.9, 0), max(gx.max() * 1.06, 0.1), 50)
+                self.ax.plot(xs, (g.slope * xs + g.intercept) * 1000, color=color,
+                             lw=1.3, alpha=0.85, zorder=2)
+
+        title = f"Williamson-Hall（{model.upper()}）"
+        if np.isfinite(variant.r2):
+            title += f"    R² = {variant.r2:.3f}"
+        if np.isfinite(variant.size_nm):
+            title += f"    D = {variant.size_nm:.2f} nm"
+        if len(groups) > 1:
+            title += f"    {len(groups)} {tr('cv.wh_groups')}"
+        self.ax.set_title(title, fontsize=10, color=INK, loc="left")
 
 
 class StandardCanvas(_BaseCanvas):

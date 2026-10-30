@@ -18,6 +18,8 @@ import math
 import numpy as np
 
 from crysize.core.analysis import AnalysisBundle
+from crysize.core.methods import (METHOD_IDS, group_name, method_assume,
+                                  method_limit, method_name, spec_of)
 from crysize.i18n import current_language, tr
 from crysize.version import APP_CONTACT_EMAIL, APP_COPYRIGHT, APP_NAME, __version__
 
@@ -175,6 +177,21 @@ def _spectrum_png(bundle: AnalysisBundle, dpi: int = 130) -> str:
     buf = io.BytesIO()
     fig.savefig(buf, format="png", facecolor="white")
     return base64.b64encode(buf.getvalue()).decode("ascii")
+
+
+def _state_text(o) -> str:
+    """方法可用性状态（不含理由文本，理由另列）。"""
+    if not o.available:
+        return tr("m.status.unavailable")
+    if o.reason:
+        return tr("m.status.degraded")
+    return tr("m.status.ok")
+
+
+def _sec_cell(o) -> str:
+    if o.secondary_kind == "none" or not np.isfinite(o.secondary):
+        return "—"
+    return f"{o.secondary:.3f} {o.secondary_unit}"
 
 
 def _status_tag(peak) -> str:
@@ -352,6 +369,50 @@ def build_html(bundle: AnalysisBundle, *, sample_name: str = "", operator: str =
 <p class="note">{tr('rep.w_note')}</p>
 """
 
+    # -- 计算方法体系（v2.0.0：5 组 7 种）--------------------------------
+    mid = bundle.config.method
+    act = bundle.outcomes.get(mid)
+    sec_val = ""
+    if act is not None and act.secondary_kind != "none" and np.isfinite(act.secondary):
+        sec_val = f"{act.secondary:.3f} {act.secondary_unit}"
+    if act is None:
+        state_txt = tr("m.status.unavailable")
+    elif not act.available:
+        state_txt = tr("m.status.unavailable")
+    elif act.reason:
+        state_txt = tr("m.status.degraded") + f"（{_esc(act.reason)}）"
+    else:
+        state_txt = tr("m.status.ok")
+    m_rows = "".join(
+        f"<tr><td>{_esc(method_name(m))}</td><td>{_esc(group_name(spec_of(m).group))}</td>"
+        f"<td class='num'>{_fmt(bundle.outcomes[m].size_nm, 2)}</td>"
+        f"<td class='num'>{_sec_cell(bundle.outcomes[m])}</td>"
+        f"<td class='num'>{_fmt(bundle.outcomes[m].r2, 3)}</td>"
+        f"<td class='num'>{bundle.outcomes[m].n_used}</td>"
+        f"<td>{_esc(state_txt if m == mid else _state_text(bundle.outcomes[m]))}</td></tr>"
+        for m in METHOD_IDS if m in bundle.outcomes)
+    method_html = f"""
+<h2>{tr('rep.h_method')}</h2>
+<dl>
+  <dt>{tr('rep.m_sel')}</dt><dd><b>{_esc(method_name(mid))}</b>
+      <span class="grey">（{_esc(group_name(spec_of(mid).group))}）</span></dd>
+  <dt>{tr('rep.m_th_size')}</dt>
+  <dd><b>{_fmt(act.size_nm if act else None, 2)} nm</b></dd>
+  <dt>{tr('sum.method.sec')}</dt><dd>{_esc(sec_val) or '—'}</dd>
+  <dt>{tr('rep.m_th_r2')}</dt><dd>{_fmt(act.r2 if act else None, 4)}</dd>
+  <dt>{tr('sum.method.state')}</dt><dd>{_esc(state_txt)}</dd>
+  <dt>{tr('m.head.assume')}</dt><dd>{_esc(method_assume(mid))}</dd>
+  <dt>{tr('m.head.limit')}</dt><dd>{_esc(method_limit(mid))}</dd>
+</dl>
+<table><caption>{tr('rep.m_table_cap')}</caption>
+<thead><tr><th>{tr('rep.m_th_method')}</th><th>{tr('rep.m_th_group')}</th>
+<th class='num'>{tr('rep.m_th_size')}</th><th class='num'>{tr('rep.m_th_sec')}</th>
+<th class='num'>{tr('rep.m_th_r2')}</th><th class='num'>{tr('rep.m_th_n')}</th>
+<th>{tr('rep.m_th_status')}</th></tr></thead>
+<tbody>{m_rows}</tbody></table>
+<p class="note">{tr('rep.m_note')}</p>
+"""
+
     # -- 谱图 ------------------------------------------------------------
     spec_png = _spectrum_png(bundle)
     spec_html = (f'<img src="data:image/png;base64,{spec_png}" alt="pattern">'
@@ -388,6 +449,7 @@ def build_html(bundle: AnalysisBundle, *, sample_name: str = "", operator: str =
 
 {inst_html}
 {wh_html}
+{method_html}
 
 <h2>{tr('rep.h5_limits')}</h2>
 <h3>{tr('rep.lim1_h')}</h3>

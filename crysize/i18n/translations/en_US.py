@@ -149,6 +149,7 @@ TRANSLATIONS = {
     "cv.wh_intercept": "Intercept {xi:.3f}",
     "cv.wh_to_size": " rad → D = {d:.1f} nm",
     "cv.excluded": "Excluded: {peaks} (poor fit quality)",
+    "cv.wh_groups": "direction groups",
     "cv.std_meas": "Standard FWHM (measured)",
     "cv.std_model": "Model ({m})",
     "cv.model_caglioti": "Caglioti U/V/W",
@@ -429,4 +430,169 @@ as possible spanning a wide angle range (≥5 peaks over ≥60° recommended).
                      "teaching only; commercial use requires a separate written license (see the "
                      "accompanying LICENSE / LICENSE-CN). When citing the algorithms, reference the "
                      "original Scherrer and Williamson–Hall papers.",
+
+    # ============ v2.0.0 method system: 5 groups / 7 methods ============
+    "g.scherrer.name": "① Scherrer",
+    "g.udm.name": "② W-H uniform deformation (UDM)",
+    "g.usdm.name": "③ W-H uniform stress (USDM)",
+    "g.udedm.name": "④ W-H deformation energy density (UDEDM)",
+    "g.warren.name": "⑤ Warren–Averbach",
+
+    "m.scherrer_fwhm.name": "Scherrer (FWHM basis, K=0.89)",
+    "m.scherrer_fwhm.assume": "All broadening comes from finite crystallite size; components assumed "
+                              "Gaussian, so instrumental width is removed by quadratic difference.",
+    "m.scherrer_fwhm.need": "Sample pattern alone gives a number; a matching standard is required to "
+                            "make it quantitative.",
+    "m.scherrer_fwhm.scene": "Routine screening when only an order-of-magnitude size is needed and "
+                             "size/strain separation is not required.",
+    "m.scherrer_fwhm.limit": "Microstrain, faults and residual instrumental width are all counted as "
+                             "size, so D is biased low; meaningless above ~100 nm.",
+
+    "m.scherrer_integral.name": "Scherrer (integral-breadth basis, K=1.0)",
+    "m.scherrer_integral.assume": "Same, but uses integral breadth, which is exactly additive under "
+                                  "convolution (Stokes 1948).",
+    "m.scherrer_integral.need": "Same; more robust than FWHM when profiles are strongly Lorentzian.",
+    "m.scherrer_integral.scene": "Visibly tailed profiles (large η), or when comparing against W-H / "
+                                 "W-A results on the same footing.",
+    "m.scherrer_integral.limit": "Same bias; integral breadth is more sensitive to residual neighbour "
+                                 "intensity inside the window, so overlapping peaks bias it high.",
+
+    "m.wh_udm.name": "W-H uniform deformation model (UDM)",
+    "m.wh_udm.assume": "Strain is the same in every direction (isotropic uniform deformation); "
+                       "β·cosθ is linear in 4sinθ.",
+    "m.wh_udm.need": "≥2 valid peaks; a standard is strongly recommended, otherwise instrumental "
+                     "broadening is absorbed into size.",
+    "m.wh_udm.scene": "Standard case where size D and microstrain ε must be separated — the least "
+                      "demanding of the three variants.",
+    "m.wh_udm.limit": "Anisotropic samples give poor linearity (low R²) and D/ε contaminate each other.",
+
+    "m.wh_usdm.name": "W-H uniform stress model (USDM)",
+    "m.wh_usdm.assume": "Stress σ is uniform; strain is distributed by directional stiffness "
+                        "(ε = σ/E(hkl)).",
+    "m.wh_usdm.need": "Cubic lattice parameter a plus elastic constants c11/c12/c44 (otherwise it "
+                      "degenerates to UDM).",
+    "m.wh_usdm.scene": "Clear elastic anisotropy with stress-type broadening dominant; compare R² "
+                       "against UDM/UDEDM and pick the best.",
+    "m.wh_usdm.limit": "Depends on the accuracy of E(hkl); a wrong a value or lattice type corrupts "
+                       "the whole abscissa.",
+
+    "m.wh_udedm.name": "W-H deformation energy density model (UDEDM)",
+    "m.wh_udedm.assume": "Deformation energy density u = ε²E/2 is uniform; the slope gives √u.",
+    "m.wh_udedm.need": "As for USDM: a and c11/c12/c44; degenerates to UDM without elastic data.",
+    "m.wh_udedm.scene": "Common for nanopowders; often more linear than USDM when deformation is "
+                        "dominated by dislocations or interface energy.",
+    "m.wh_udedm.limit": "As for USDM; the uniform-energy assumption may fail for dense bulk samples.",
+
+    "m.wa_single.name": "Warren–Averbach single-line approximation (Voigt)",
+    "m.wa_single.assume": "Lorentzian component → size broadening, Gaussian component → strain "
+                          "broadening (a profile-shape assumption).",
+    "m.wa_single.need": "Isolated single peaks suffice, no higher orders required; a standard is "
+                        "needed.",
+    "m.wa_single.scene": "Compromise when no higher-order reflections are measurable but size/strain "
+                         "separation is still wanted.",
+    "m.wa_single.limit": "Strongly profile-shape dependent; deviations >20% are possible. Do not mix "
+                         "with Warren–Averbach Fourier values.",
+
+    "m.wa_fourier.name": "Warren–Averbach multi-order Fourier method",
+    "m.wa_fourier.assume": "Separates the size term A^S(L) from the strain term A^D(L) in Fourier "
+                           "space; no profile-shape superposition assumed.",
+    "m.wa_fourier.need": "≥3 valid peaks with at least 2 distinct d values (higher orders of one "
+                         "family are ideal); a standard is mandatory.",
+    "m.wa_fourier.scene": "Highest-tier choice when data quality allows higher orders; yields a "
+                          "volume-weighted size and L-dependent r.m.s. strain.",
+    "m.wa_fourier.limit": "Neighbour overlap, residual Kα₂ and noise are all amplified by the "
+                          "Fourier transform; no result is given when the data do not qualify.",
+
+    "m.sec.strain": "microstrain ε",
+    "m.sec.stress": "uniform stress σ",
+    "m.sec.energy": "energy density u",
+    "m.reason.no_valid_peak": "no valid peak",
+    "m.reason.too_few": "fewer than 2 valid peaks",
+    "m.reason.degenerate": "no elastic constants — degenerates to the UDM fit",
+    "m.reason.no_lattice": "grouping needs a lattice parameter and successful indexing",
+    "m.reason.wa_unmet": "data requirements of the Fourier method not met",
+    "m.reason.unknown": "unknown method",
+    "m.head.assume": "Assumption",
+    "m.head.need": "Input required",
+    "m.head.scene": "Best used when",
+    "m.head.limit": "Limitation",
+    "m.status.ok": "OK",
+    "m.status.degraded": "degraded",
+    "m.status.unavailable": "unavailable",
+
+    "whv.too_few": "fewer than 2 valid peaks — cannot regress",
+    "whv.neg_slope": "negative slope — strain term unphysical",
+    "whv.low_r2": "poor linearity (R²={r2:.3f}) — check anisotropy or overlapping peaks",
+    "whv.no_index": "indexing failed — cannot group by direction",
+    "whv.group_single": "only one direction group — equivalent to no grouping",
+    "whv.group_fallback": "no group has 2 peaks (no higher orders in the pattern) — reverted to the ungrouped fit",
+    "whv.degenerate": "E(hkl) is constant — this variant is algebraically identical to UDM",
+    "whv.no_elastic": "no elastic constants — abscissa degenerates to 4sinθ",
+    "whv.few": "only {n} peaks in the regression — limited confidence",
+
+    "wa.excluded": "peak excluded by the quality gate",
+    "wa.no_standard": "no instrumental broadening correction",
+    "wa.need_standard": "no standard loaded — broadening includes the instrument",
+    "wa.single_note": "the single-line approximation is profile-shape dependent and is not "
+                      "comparable with Fourier results",
+    "wa.fourier_need_peaks": "Fourier method needs ≥3 valid peaks, found {n}",
+    "wa.fourier_need_orders": "Fourier method needs at least 2 distinct d values (higher orders)",
+    "wa.fourier_need_std": "Fourier method needs a standard for Stokes deconvolution",
+    "wa.fourier_window": "no common Fourier interval across peak windows",
+    "wa.fourier_no_fit": "Fourier coefficient regression did not converge",
+    "wa.fourier_no_size": "size could not be obtained from the initial slope of A^S(L)",
+    "wa.fourier_out_of_range": "D_v={d:.1f} nm is outside the reliable range of breadth methods (0.5–500 nm) — indicative only",
+    "wa.th_l": "L (Å)",
+    "wa.th_as": "A^S(L)",
+    "wa.th_eps": "⟨ε²⟩^½",
+
+    # GUI
+    "group.method": "Calculation method",
+    "param.method": "Primary method",
+    "param.group_dir": "group by crystal direction (anisotropy)",
+    "param.group_dir_tip": "group by Γ — needs a lattice parameter and ≥2 peaks per group",
+    "param.elastic": "Phase elastic data (USDM/UDEDM and grouping)",
+    "param.preset": "Preset phase",
+    "param.preset_none": "custom / disabled",
+    "param.a": "lattice a",
+    "param.c11": "c₁₁",
+    "param.c12": "c₁₂",
+    "param.c44": "c₄₄",
+    "param.lattice": "lattice type",
+    "param.lattice_fcc": "fcc",
+    "param.lattice_bcc": "bcc",
+    "param.lattice_simple": "simple",
+    "btn.method_guide": "Method selection guide",
+    "sum.method.head": "Primary method",
+    "sum.method.sec": "secondary quantity",
+    "sum.method.state": "status",
+    "tab.methods": "Method comparison",
+    "method2.title": "Method selection guide (5 groups · 7 methods)",
+    "method2.body": "① Scherrer: FWHM-basis / integral-breadth — use when only a size magnitude is "
+                    "needed; microstrain is folded into size, so D is biased low.\n"
+                    "② UDM: standard way to separate size from microstrain, least input required.\n"
+                    "③ USDM: uniform stress, strain distributed by directional stiffness; needs "
+                    "elastic constants.\n"
+                    "④ UDEDM: uniform deformation energy density; common for nanopowders; needs "
+                    "elastic constants.\n"
+                    "⑤ Warren–Averbach: single-line approximation (no higher orders needed, "
+                    "profile-shape dependent); multi-order Fourier method (≥3 peaks, ≥2 distinct d, "
+                    "most rigorous).\n\n"
+                    "Without elastic constants ②③④ collapse onto the same fit; grouping by direction "
+                    "is an add-on switch for ②③④ and requires a lattice parameter for indexing.",
+    "rep.h_method": "Methods and cross-comparison",
+    "rep.m_sel": "primary method of this run",
+    "rep.m_table_cap": "Table 5　Cross-comparison of the 7 methods (same peak fits, not independent "
+                       "re-fits)",
+    "rep.m_th_method": "Method",
+    "rep.m_th_group": "Group",
+    "rep.m_th_size": "D (nm)",
+    "rep.m_th_sec": "Secondary",
+    "rep.m_th_r2": "R²",
+    "rep.m_th_n": "peaks",
+    "rep.m_th_status": "status",
+    "rep.m_note": "The D values have different meanings across methods (Scherrer: number average; "
+                  "W-A Fourier: volume weighted), so comparing numbers across methods is meaningless; "
+                  "compare consistency within one method instead.",
+    "csv.h_method": "method",
 }

@@ -15,6 +15,7 @@ import datetime
 import os
 import traceback
 
+import numpy as np
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QColor, QDesktopServices, QFont, QIcon
 from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox,
@@ -26,12 +27,17 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox,
                                QVBoxLayout, QWidget)
 
 from crysize.core.analysis import AnalysisBundle, AnalysisConfig, refit_with_positions, run_analysis
+from crysize.core.elasticity import PRESETS, ElasticParams
+from crysize.core.methods import (GROUPS, METHOD_IDS, group_name, method_assume,
+                                  method_limit, method_name, method_need,
+                                  method_scene, spec_of)
 from crysize.core.pattern import SUPPORTED_EXTS, Pattern, read_pattern
 from crysize.edition import IS_INTERNAL
 from crysize.gui.canvas import PatternCanvas, StandardCanvas, WHCanvas
 from crysize.gui.dialogs import AboutDialog, CopyrightDialog
 from crysize.gui.report import build_html
 from crysize.gui.resources import app_icon_path
+from crysize.gui.statusbar import CenteredBadgeStatusBar
 from crysize.gui.theme import (BODY, BRAND, ERR_RED, FAINT, INK, LINE, MUTED,
                                OK_GREEN, UI_FONT, WARN_AMBER)
 from crysize.i18n import (available_languages, current_language, load_language,
@@ -80,6 +86,7 @@ class MainWindow(QMainWindow):
         self.standard: Pattern | None = None
         self.bundle: AnalysisBundle | None = None
         self._loading_table = False
+        self._last_method = "scherrer_fwhm"   # 方法下拉重建前后的选中项记忆
 
         self.setWindowTitle(f"{APP_NAME} v{__version__} — {tr('win.title')}")
         self.resize(1320, 880)
@@ -129,11 +136,11 @@ class MainWindow(QMainWindow):
         root.addWidget(split, 1)
 
         self.setCentralWidget(central)
-        self._badge: QLabel | None = None
-        if IS_INTERNAL:
-            self._badge = QLabel()
-            self._badge.setStyleSheet(f"color:{WARN_AMBER}; padding-right:8px;")
-            self.statusBar().addPermanentWidget(self._badge)
+        # 状态栏：内部评估版徽章红色加粗、严格水平居中（见 gui/statusbar.py）
+        bar = CenteredBadgeStatusBar(self)
+        self.setStatusBar(bar)
+        self._status_bar = bar
+        self._badge: QLabel | None = bar.badge() if IS_INTERNAL else None
 
     # ------------------------------------------------------------------
     def _build_side_panel(self) -> QWidget:
@@ -196,6 +203,7 @@ class MainWindow(QMainWindow):
         g.addWidget(self.sp_prom, 4, 1)
         g.addWidget(self.ck_ka2, 5, 0, 1, 2)
         lay.addWidget(self.box_params)
+        lay.addWidget(self._build_method_box())
 
         # 角度校正
         self.box_corr = QGroupBox()
@@ -237,6 +245,113 @@ class MainWindow(QMainWindow):
             ops.addWidget(b)
         lay.addLayout(ops)
         return panel
+
+    # ------------------------------------------------------------------
+    def _build_method_box(self) -> QWidget:
+        """计算方法选择（5 组 7 种）+ 各向异性/弹性参数。"""
+        self.box_method = QGroupBox()
+        g = QGridLayout(self.box_method)
+        g.setHorizontalSpacing(8)
+        g.setVerticalSpacing(6)
+
+        self.cb_method = QComboBox()
+        self.cb_method.currentIndexChanged.connect(self._on_method_changed)
+
+        self.ck_group = QCheckBox()
+        self.ck_group.setChecked(False)
+        self.ck_group.toggled.connect(self._schedule)
+
+        self.cb_preset = QComboBox()
+        self.cb_preset.currentIndexChanged.connect(self._on_preset_changed)
+
+        self.sp_a = QDoubleSpinBox()
+        self.sp_a.setRange(1.0, 30.0)
+        self.sp_a.setDecimals(4)
+        self.sp_a.setSingleStep(0.001)
+        self.sp_a.setValue(0.0)
+        self.sp_a.valueChanged.connect(self._schedule)
+
+        self.sp_c11 = QDoubleSpinBox()
+        self.sp_c12 = QDoubleSpinBox()
+        self.sp_c44 = QDoubleSpinBox()
+        for sp in (self.sp_c11, self.sp_c12, self.sp_c44):
+            sp.setRange(0.0, 2000.0)
+            sp.setDecimals(1)
+            sp.setSingleStep(1.0)
+            sp.setValue(0.0)
+            sp.valueChanged.connect(self._schedule)
+
+        self.cb_lattice = QComboBox()
+        self.cb_lattice.currentIndexChanged.connect(self._schedule)
+
+        self.btn_guide = QPushButton()
+        self.btn_guide.clicked.connect(self.show_method_guide)
+
+        # (label, i18n key) —— retranslateUi 统一改文案
+        self._method_rows: list[tuple[QLabel, str]] = []
+        row = 0
+        for key in ("param.method", "param.group_dir", "param.preset",
+                    "param.a", "param.c11", "param.lattice"):
+            lbl = QLabel()
+            self._method_rows.append((lbl, key))
+            g.addWidget(lbl, row, 0)
+            row += 1
+        g.addWidget(self.cb_method, 0, 1)
+        g.addWidget(self.ck_group, 1, 0, 1, 2)
+        g.addWidget(self.cb_preset, 2, 1)
+        g.addWidget(self.sp_a, 3, 1)
+        h = QHBoxLayout()
+        h.setSpacing(4)
+        h.addWidget(self.sp_c11)
+        h.addWidget(self.sp_c12)
+        h.addWidget(self.sp_c44)
+        g.addLayout(h, 4, 1)
+        g.addWidget(self.cb_lattice, 5, 1)
+        g.addWidget(self.btn_guide, 6, 0, 1, 2)
+        return self.box_method
+
+    def _fill_method_combo(self) -> None:
+        """方法下拉：按 5 组分组，条目形如「组名 — 方法名」。"""
+        cur = self._current_method_id()
+        self.cb_method.blockSignals(True)
+        self.cb_method.clear()
+        for gid, mids in GROUPS:
+            for mid in mids:
+                self.cb_method.addItem(f"{group_name(gid)} — {method_name(mid)}", mid)
+        idx = self.cb_method.findData(cur)
+        self.cb_method.setCurrentIndex(idx if idx >= 0 else 0)
+        self.cb_method.blockSignals(False)
+
+    def _current_method_id(self) -> str:
+        data = self.cb_method.currentData()
+        return str(data) if data else self._last_method
+
+    def _current_elastic(self) -> ElasticParams | None:
+        """由界面输入组装弹性参数；全部为 0 时视为不启用。"""
+        a = self.sp_a.value()
+        c11, c12, c44 = self.sp_c11.value(), self.sp_c12.value(), self.sp_c44.value()
+        if min(a, c11, c44) <= 0:
+            return None
+        lat = ("fcc", "bcc", "simple")[max(0, self.cb_lattice.currentIndex())]
+        return ElasticParams(a=a, c11=c11, c12=c12, c44=c44, lattice=lat)
+
+    def _on_method_changed(self) -> None:
+        self._last_method = self._current_method_id()
+        spec = spec_of(self._last_method)
+        self.ck_group.setEnabled(spec.supports_grouping)
+        self._schedule()
+
+    def _on_preset_changed(self) -> None:
+        name = self.cb_preset.currentData()
+        if not name:
+            return
+        p = PRESETS[name]
+        self.sp_a.setValue(p.a)
+        self.sp_c11.setValue(p.c11)
+        self.sp_c12.setValue(p.c12)
+        self.sp_c44.setValue(p.c44)
+        idx = ("fcc", "bcc", "simple").index(p.lattice)
+        self.cb_lattice.setCurrentIndex(idx)
 
     # ------------------------------------------------------------------
     def _build_tabs(self) -> QWidget:
@@ -285,6 +400,29 @@ class MainWindow(QMainWindow):
         v3.addWidget(self.canvas_std, 1)
         v3.addWidget(self.txt_inst, 1)
         self.tabs.addTab(self.tab_inst, "")
+
+        # --- 方法对比（v2.0.0：5 组 7 种）---
+        self.tab_methods = QWidget()
+        v4 = QVBoxLayout(self.tab_methods)
+        v4.setContentsMargins(6, 6, 6, 6)
+        v4.setSpacing(6)
+        self.tbl_methods = QTableWidget(0, 6)
+        self.tbl_methods.verticalHeader().setVisible(False)
+        self.tbl_methods.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.tbl_methods.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.tbl_methods.setMinimumHeight(230)
+        mh = self.tbl_methods.horizontalHeader()
+        for col, mode in enumerate((QHeaderView.ResizeToContents, QHeaderView.ResizeToContents,
+                                    QHeaderView.ResizeToContents, QHeaderView.ResizeToContents,
+                                    QHeaderView.ResizeToContents, QHeaderView.Stretch)):
+            mh.setSectionResizeMode(col, mode)
+        self.txt_method = QTextBrowser()
+        self.txt_method.setOpenExternalLinks(False)
+        self.txt_method.setStyleSheet(
+            "QTextBrowser{border:1px solid #E2E8F0;border-radius:6px;background:#FCFCFD;}")
+        v4.addWidget(self.tbl_methods)
+        v4.addWidget(self.txt_method, 1)
+        self.tabs.addTab(self.tab_methods, "")
         return self.tabs
 
     # ------------------------------------------------------------------
@@ -383,10 +521,41 @@ class MainWindow(QMainWindow):
         self.tabs.setTabText(0, tr("tab.scherrer"))
         self.tabs.setTabText(1, tr("tab.wh"))
         self.tabs.setTabText(2, tr("tab.inst"))
+        self.tabs.setTabText(3, tr("tab.methods"))
         self.tbl.setHorizontalHeaderLabels(["", "2θ (°)", "D (nm)", tr("th.note")])
+        self.tbl_methods.setHorizontalHeaderLabels([
+            tr("rep.m_th_method"), tr("rep.m_th_group"), tr("rep.m_th_size"),
+            tr("rep.m_th_sec"), tr("rep.m_th_r2"), tr("rep.m_th_status")])
+
+        # 方法面板：条目文案随语言重建，保住当前选择
+        self.box_method.setTitle(tr("group.method"))
+        for lbl, key in self._method_rows:
+            lbl.setText(tr(key))
+        self._fill_method_combo()
+        self.ck_group.setToolTip(tr("param.group_dir_tip"))
+        self.ck_group.setEnabled(spec_of(self._current_method_id()).supports_grouping)
+        self.btn_guide.setText(tr("btn.method_guide"))
+        preset_idx = self.cb_preset.currentIndex()
+        self.cb_preset.blockSignals(True)
+        self.cb_preset.clear()
+        self.cb_preset.addItem(tr("param.preset_none"), "")
+        for name in PRESETS:
+            self.cb_preset.addItem(PRESETS[name].label or name, name)
+        self.cb_preset.setCurrentIndex(preset_idx if preset_idx >= 0 else 0)
+        self.cb_preset.blockSignals(False)
+        lat_idx = self.cb_lattice.currentIndex()
+        self.cb_lattice.blockSignals(True)
+        self.cb_lattice.clear()
+        self.cb_lattice.addItems([tr("param.lattice_fcc"), tr("param.lattice_bcc"),
+                                  tr("param.lattice_simple")])
+        self.cb_lattice.setCurrentIndex(lat_idx if lat_idx >= 0 else 0)
+        self.cb_lattice.blockSignals(False)
+        self.sp_a.setSuffix(" Å")
+        for sp in (self.sp_c11, self.sp_c12, self.sp_c44):
+            sp.setSuffix(" GPa")
 
         if self._badge is not None:
-            self._badge.setText(tr("edition.internal"))
+            self._status_bar.set_badge_text(tr("edition.internal"))
 
         # 样品/标样标签与角度校正行（有数据时按数据重排，无数据用占位文案）
         if self.sample is not None:
@@ -413,6 +582,7 @@ class MainWindow(QMainWindow):
             self.canvas_wh.set_bundle(None)
             self.canvas_std.set_instrument(None)
             self._fill_summaries(None)
+            self._fill_method_tab(None)
 
     def _on_language(self, code: str) -> None:
         set_language(code)
@@ -500,6 +670,9 @@ class MainWindow(QMainWindow):
             width_mode="fwhm" if self.cb_mode.currentIndex() == 0 else "integral",
             K=self.sp_K.value(),
             min_prominence_frac=self.sp_prom.value(),
+            method=self._current_method_id(),
+            group_by_direction=self.ck_group.isChecked() and self.ck_group.isEnabled(),
+            elastic=self._current_elastic(),
         )
 
     def recompute(self) -> None:
@@ -549,6 +722,7 @@ class MainWindow(QMainWindow):
         self.canvas_wh.set_bundle(b)
         self.canvas_std.set_instrument(b.instrument)
         self._fill_summaries(b)
+        self._fill_method_tab(b)
 
         if b.instrument is not None:
             self.lbl_corr.setText(b.instrument.correction.describe())
@@ -682,6 +856,86 @@ class MainWindow(QMainWindow):
 {tr('sum.inst.empty')}</div>""")
 
     # ------------------------------------------------------------------
+    # 方法对比（5 组 7 种）
+    # ------------------------------------------------------------------
+    def _fill_method_tab(self, b: AnalysisBundle | None) -> None:
+        if b is None or not b.outcomes:
+            self.tbl_methods.setRowCount(0)
+            self.txt_method.setHtml(
+                f'<div style="font-family:\'{UI_FONT}\';color:{MUTED};font-size:12.5px;'
+                f'padding:8px;">{tr("dlg.need_compute")}</div>')
+            return
+
+        rows = []
+        for mid in METHOD_IDS:
+            o = b.outcomes.get(mid)
+            if o is None:
+                continue
+            rows.append((mid, o))
+        self.tbl_methods.setRowCount(len(rows))
+        for i, (mid, o) in enumerate(rows):
+            self.tbl_methods.setItem(i, 0, QTableWidgetItem(method_name(mid)))
+            self.tbl_methods.setItem(i, 1, QTableWidgetItem(group_name(spec_of(mid).group)))
+            it = QTableWidgetItem(_fmt(o.size_nm, 2))
+            it.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            it.setFont(MONO)
+            self.tbl_methods.setItem(i, 2, it)
+            sec = "" if o.secondary_kind == "none" or not np.isfinite(o.secondary) \
+                else f"{o.secondary:.3f} {o.secondary_unit}"
+            it = QTableWidgetItem(sec)
+            it.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            self.tbl_methods.setItem(i, 3, it)
+            it = QTableWidgetItem(_fmt(o.r2, 3))
+            it.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            self.tbl_methods.setItem(i, 4, it)
+            if not o.available:
+                state, color = tr("m.status.unavailable"), QColor("#B91C1C")
+            elif o.reason:
+                state, color = tr("m.status.degraded"), QColor("#B45309")
+            else:
+                state, color = tr("m.status.ok"), QColor("#15803D")
+            if o.reason:
+                state += f"（{o.reason}）"
+            st = QTableWidgetItem(state)
+            st.setForeground(color)
+            self.tbl_methods.setItem(i, 5, st)
+            if mid == b.active_method:
+                for c in range(6):
+                    item = self.tbl_methods.item(i, c)
+                    if item is not None:
+                        f = item.font()
+                        f.setBold(True)
+                        item.setFont(f)
+
+        mid = b.active_method
+        o = b.outcomes.get(mid)
+        sec_line = ""
+        if o is not None and o.secondary_kind != "none" and np.isfinite(o.secondary):
+            sec_line = (f'<div><span style="font-size:20px;font-weight:700;color:{BRAND};">'
+                        f'{o.secondary:.3f}</span>'
+                        f'<span style="font-size:12px;color:{MUTED};"> {o.secondary_unit}'
+                        f'（{o.secondary_label}）</span></div>')
+        warn_html = "".join(
+            f'<div style="color:{WARN_AMBER};font-size:12px;">⚠ {w}</div>'
+            for w in (o.warnings if o else []))
+        self.txt_method.setHtml(f"""
+<div style="font-family:'{UI_FONT}';font-size:12.5px;">
+<div style="font-size:12px;color:{MUTED};">{tr('sum.method.head')}</div>
+<div><b style="font-size:14px;">{method_name(mid)}</b>
+<span style="color:{MUTED};">（{group_name(spec_of(mid).group)}）</span></div>
+<div><span style="font-size:26px;font-weight:700;color:{BRAND};">{_fmt(o.size_nm if o else None, 2)}</span>
+<span style="font-size:13px;color:{MUTED};"> nm</span></div>
+{sec_line}
+<div style="margin-top:6px;color:{INK};">
+<b>{tr('m.head.assume')}</b>：{method_assume(mid)}<br>
+<b>{tr('m.head.need')}</b>：{method_need(mid)}<br>
+<b>{tr('m.head.scene')}</b>：{method_scene(mid)}<br>
+<b>{tr('m.head.limit')}</b>：{method_limit(mid)}
+</div>
+<div style="margin-top:6px;">{warn_html}</div>
+</div>""")
+
+    # ------------------------------------------------------------------
     # 导出
     # ------------------------------------------------------------------
     def export_report(self) -> None:
@@ -743,6 +997,19 @@ class MainWindow(QMainWindow):
                     w.writerow(["U(deg²)", f"{b.instrument.U:.6e}"])
                     w.writerow(["V(deg²)", f"{b.instrument.V:.6e}"])
                     w.writerow(["W(deg²)", f"{b.instrument.W:.6e}"])
+                # v2.0.0：7 种方法横向对比（同一组峰拟合，非独立重算）
+                w.writerow([])
+                w.writerow([tr("csv.h_method"), tr("rep.m_th_group"),
+                            tr("rep.m_th_size"), tr("rep.m_th_sec"),
+                            tr("rep.m_th_r2"), tr("rep.m_th_n")])
+                for mid in METHOD_IDS:
+                    o = b.outcomes.get(mid)
+                    if o is None:
+                        continue
+                    sec = "" if (o.secondary_kind == "none"
+                                 or not np.isfinite(o.secondary)) else f"{o.secondary:.4f}"
+                    w.writerow([method_name(mid), group_name(spec_of(mid).group),
+                                _fmt(o.size_nm, 3), sec, _fmt(o.r2, 4), o.n_used])
         except Exception as exc:
             QMessageBox.critical(self, tr("dlg.export_fail"), str(exc))
             return
@@ -751,6 +1018,10 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
     def show_method(self) -> None:
         QMessageBox.information(self, tr("method.title"), tr("method.body"))
+
+    def show_method_guide(self) -> None:
+        """5 组 7 种方法的选择场景说明。"""
+        QMessageBox.information(self, tr("method2.title"), tr("method2.body"))
 
     def show_about(self) -> None:
         AboutDialog(self).exec()

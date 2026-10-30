@@ -13,6 +13,13 @@ from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+# offscreen 平台使用 Qt 基础字体数据库：不设 QT_QPA_FONTDIR 时字体表为空，
+# CJK 全部渲染为方块（豆腐块）；指向系统字体目录后回退到 SimHei 正常显示。
+# 仅影响冒烟截图，真实应用走 "windows" 平台（DirectWrite 全量枚举），不受影响。
+if sys.platform == "win32" and "QT_QPA_FONTDIR" not in os.environ:
+    os.environ["QT_QPA_FONTDIR"] = os.path.join(
+        os.environ.get("WINDIR", r"C:\Windows"), "Fonts")
+
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
@@ -38,6 +45,43 @@ def _check_missing_keys() -> int:
             bad += 1
             print(f"[i18n] {lang}: missing={sorted(miss)} extra={sorted(extra)}")
     return bad
+
+
+def _scan_methods(win, app, outdir: Path) -> int:
+    """逐个切换 7 种方法：重算 → 切到方法页 → 截图 → 断言结果存在。"""
+    from crysize.core.elasticity import PRESETS
+    from crysize.core.methods import METHOD_IDS, method_name
+
+    fail = 0
+    # 选一个内置物相，让 USDM/UDEDM 走真实的 E(hkl) 而不是退化路径
+    idx = win.cb_preset.findData("CeO2")
+    if idx >= 0:
+        win.cb_preset.setCurrentIndex(idx)
+        app.processEvents()
+    win.tabs.setCurrentIndex(3)
+    for mid in METHOD_IDS:
+        i = win.cb_method.findData(mid)
+        if i < 0:
+            print(f"[method] {mid}: 下拉框里找不到该方法")
+            fail += 1
+            continue
+        win.cb_method.setCurrentIndex(i)
+        app.processEvents()
+        win.recompute()
+        app.processEvents()
+        shot = outdir / f"method_{mid}.png"
+        win.grab().save(str(shot))
+        o = (win.bundle.outcomes.get(mid) if win.bundle else None)
+        if o is None:
+            print(f"[method] {mid}: 无结果对象")
+            fail += 1
+            continue
+        state = "不可用" if not o.available else ("降级" if o.reason else "可用")
+        print(f"[method] {mid:20s} D={o.size_nm:9.3f} nm  sec={o.secondary:12.4f} "
+              f"R²={o.r2:7.4f}  {state}  {o.reason}")
+        if not o.available and mid not in ("wa_fourier",):
+            fail += 1
+    return fail
 
 
 def main() -> int:
@@ -86,6 +130,9 @@ def main() -> int:
             print(f"[bundle] {lang}: fits={len(win.bundle.fits)} "
                   f"valid={win.bundle.scherrer.n_valid}")
         print(f"[lang] {lang} active={current_language()}")
+
+    # v2.0.0：7 种方法逐个切换 —— 每次都要能重算、能出数、界面不炸
+    fail += _scan_methods(win, app, outdir)
 
     # 中文态补拍：三个页签 + 关于/版权对话框（家族新增组件必须实拍）
     set_language("zh_CN")
