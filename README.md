@@ -56,10 +56,28 @@ python -m crysize.gui
 | 版次 | 产物 | 打包命令 | 版次标识 |
 |---|---|---|---|
 | 内部评估版 | `dist/PolyXRD-CrySize-vX.Y.Z.exe`（单文件免安装） | `build_exe.bat` | 状态栏 + 关于框标「内部评估版本」（`installer/rthook_internal.py` 运行时覆写） |
-| 注册版 | `dist/PolyXRD-CrySize/PolyXRD-CrySize.exe`（onedir）+ `dist/PolyXRD-CrySize-vX.Y.Z-Setup.exe`（Inno Setup 安装包） | `build_setup.bat` | 无标识（`crysize/edition.py` 默认 `registered`） |
+| 注册版 | `dist/PolyXRD-CrySize/PolyXRD-CrySize.exe`（onedir）+ `dist/PolyXRD-CrySize-vX.Y.Z-Setup.exe`（Inno Setup 安装包） | `build_setup.bat` | 无标识（`crysize/edition.py` 默认 `registered`），但**启用家族统一注册机制**（`crysize/registration.py`） |
 
-版次只影响标识显示，不影响任何计算功能。两个 spec 共用同一份源码与
+版次只影响标识显示与注册入口，不影响任何计算功能。两个 spec 共用同一份源码与
 `resources/`，差异仅在 onefile/onedir 与是否加 runtime hook。
+
+### 注册机制（注册版，自 v2.0.1 起）
+
+注册版接入 PolyXRD 家族统一注册机制（实现与 `PolyXRD-Reg` 完全一致，同一把
+密钥与 `PXRD1-` 注册码格式，可用家族 `PolyXRD-RegTool` 或本项目
+`tools/make_reg_code.py` 出码）：
+
+- **未注册**：每次启动弹窗提示版权声明与联系邮箱，点「确定」继续使用、下次仍提示；点「输入注册码」可立即注册。
+- **注册**：帮助菜单「输入注册码 (&R)…」粘贴注册码，校验通过即永久注册（状态存
+  `%APPDATA%/PolyXRD/Registration/CrySize.json`，每次启动重校验，手改无效）。
+- **状态栏**：最右侧右对齐显示「已注册：<单位部门名称>」或「未注册」。
+- **内部评估版**（单文件 exe）不启用该机制，仅居中红字标「内部评估版本」。
+
+出码（开发方）：
+```bash
+python tools/make_reg_code.py "清华大学材料学院"
+python tools/make_reg_code.py --verify PXRD1-XXXX-XXXX-XXXX-XXXX
+```
 
 ## 使用流程
 
@@ -155,7 +173,7 @@ D 偏大"的方向写反 —— 说明闭环测试不是形式，是唯一的正
 | 风格 | Fusion 样式 + 局部内联样式 + `gui/theme.py` 统一配色，不用全局 QSS |
 | 字体 | Microsoft YaHei 9 pt |
 | i18n | `crysize/i18n/`（manager + 三语翻译表），接口与 RutAna 完全一致（`tr()` 缺键返回 `⟪key⟫` 不回退）；core 层警告/质量标记也经 `tr()` 生成，语言切换后主窗口自动重算刷新 |
-| 版次 | `crysize/edition.py`：`registered`（安装包）或 `internal`（单文件 exe，状态栏标"内部评估版本"，由 `installer/rthook_internal.py` 覆写） |
+| 版次 | `crysize/edition.py`：`registered`（安装包，启用 `registration.py` 注册机制）或 `internal`（单文件 exe，状态栏标"内部评估版本"，由 `installer/rthook_internal.py` 覆写，不启用注册） |
 | 打包 | `build_exe.bat` → 单文件内部评估版；`build_setup.bat` → onedir + Inno Setup 注册版安装包 |
 | 许可 | 双许可：学术（非商业研究与教学）免费；商业用途须取得书面授权。条款见 `LICENSE` / `LICENSE-CN` |
 | 联系 | sshztx@outlook.com · https://github.com/PolyXRD |
@@ -169,6 +187,7 @@ D 偏大"的方向写反 —— 说明闭环测试不是形式，是唯一的正
 crysize/
   version.py      版本与产品标识（家族统一字段）
   edition.py      版次标识（registered / internal）
+  registration.py 家族统一注册机制（注册版启用：未注册提示/输入注册码/状态栏单位名；密钥与 PolyXRD-Reg 一致）
   i18n/           三语基础设施（manager + translations/zh_CN,en_US,ja_JP）
   core/
     pattern.py     谱图读取（表头跳过、元数据提取、降序翻转）

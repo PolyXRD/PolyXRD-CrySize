@@ -33,6 +33,7 @@ from crysize.core.methods import (GROUPS, METHOD_IDS, group_name, method_assume,
                                   method_scene, spec_of)
 from crysize.core.pattern import SUPPORTED_EXTS, Pattern, read_pattern
 from crysize.edition import IS_INTERNAL
+from crysize import registration
 from crysize.gui.canvas import PatternCanvas, StandardCanvas, WHCanvas
 from crysize.gui.dialogs import AboutDialog, CopyrightDialog
 from crysize.gui.report import build_html
@@ -45,6 +46,9 @@ from crysize.i18n import (available_languages, current_language, load_language,
 from crysize.version import APP_CONTACT_EMAIL, APP_COPYRIGHT, APP_NAME, APP_SHORT, __version__
 
 MONO = QFont("Consolas", 9)
+
+#: i18n 长码 -> registration 模块短码（zh_CN/en_US/ja_JP -> zh/en/ja）
+_REG_LANG = {"zh_CN": "zh", "en_US": "en", "ja_JP": "ja"}
 
 
 def _fmt(v, nd: int = 2, dash: str = "—") -> str:
@@ -88,6 +92,14 @@ class MainWindow(QMainWindow):
         self._loading_table = False
         self._last_method = "scherrer_fwhm"   # 方法下拉重建前后的选中项记忆
 
+        # 注册机制（仅注册版启用；内部评估版 IS_INTERNAL=True 不启用）。
+        # 状态文件落在 %APPDATA%/PolyXRD/Registration/CrySize.json，每次启动重校验。
+        self._reg = None
+        if not IS_INTERNAL:
+            registration.set_language(_REG_LANG.get(current_language(), "zh"))
+            self._reg = registration.RegistrationManager(
+                APP_NAME, registration.default_state_path(APP_SHORT))
+
         self.setWindowTitle(f"{APP_NAME} v{__version__} — {tr('win.title')}")
         self.resize(1320, 880)
         icon = app_icon_path()
@@ -97,6 +109,11 @@ class MainWindow(QMainWindow):
         self._build_actions()
         self.retranslateUi()
         self._status(tr("status.ready"))
+
+        # 启动未注册提示：QTimer 延迟到事件循环，不阻塞冒烟/启动画面；
+        # 离屏（QT_QPA_PLATFORM=offscreen）或 POLYXRD_REG_NO_PROMPT=1 时自动跳过。
+        if self._reg is not None:
+            QTimer.singleShot(0, lambda: self._reg.startup_check(self))
 
     # ------------------------------------------------------------------
     def _build_ui(self) -> None:
@@ -141,6 +158,10 @@ class MainWindow(QMainWindow):
         self.setStatusBar(bar)
         self._status_bar = bar
         self._badge: QLabel | None = bar.badge() if IS_INTERNAL else None
+
+        # 注册版：状态栏最右侧（右对齐）显示「已注册：<单位部门名称>」/「未注册」
+        if self._reg is not None:
+            self._reg.attach_status_label(bar, self)
 
     # ------------------------------------------------------------------
     def _build_side_panel(self) -> QWidget:
@@ -471,6 +492,10 @@ class MainWindow(QMainWindow):
         self.act_about = QAction(self)
         self.act_about.triggered.connect(self.show_about)
         self.menu_help.addAction(self.act_about)
+        # 注册版：帮助菜单追加「输入注册码 (&R)…」（内部评估版无此入口）
+        if self._reg is not None:
+            self.menu_help.addSeparator()
+            self._reg.add_help_action(self.menu_help, self)
 
     # ------------------------------------------------------------------
     # 多语言
@@ -588,6 +613,10 @@ class MainWindow(QMainWindow):
         set_language(code)
         save_language(code)
         self.retranslateUi()
+        # 注册版：同步注册模块文案并重刷新状态栏标签（已注册单位名/未注册）
+        if self._reg is not None:
+            registration.set_language(_REG_LANG.get(code, "zh"))
+            self._reg.refresh()
 
     def _status(self, msg: str) -> None:
         self.statusBar().showMessage(msg)

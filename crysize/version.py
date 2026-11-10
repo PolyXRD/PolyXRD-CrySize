@@ -1,6 +1,6 @@
 """版本与产品标识 —— 家族统一风格。"""
 
-__version__ = "2.0.0"
+__version__ = "2.0.1"
 
 APP_NAME = "PolyXRD CrySize"
 APP_TAGLINE = "XRD 峰宽分析：晶粒尺寸与微应变"

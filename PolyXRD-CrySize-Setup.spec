@@ -30,6 +30,7 @@ a = Analysis(
         "crysize",
         "crysize.version",
         "crysize.edition",
+        "crysize.registration",
         # i18n（三语翻译表必须显式收集，否则运行时缺表）
         "crysize.i18n",
         "crysize.i18n.i18n_manager",
