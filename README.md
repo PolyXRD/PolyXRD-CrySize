@@ -1,230 +1,228 @@
 # PolyXRD CrySize
 
-XRD 粉末衍射谱的**晶粒尺寸**与**微应变**分析工具。导入样品谱图与同条件测试的
-线宽标样（Si / LaB₆）谱图，程序自动识别衍射峰、做峰形拟合、扣除仪器宽化，
-再用 **Scherrer 方程**与 **Williamson-Hall 法**给出晶粒尺寸。
+A **crystallite size** and **microstrain** analysis tool for XRD powder diffraction patterns. Import the sample pattern and the
+line-width standard (Si / LaB₆) pattern measured under the same conditions; the program automatically identifies diffraction peaks, performs peak-shape fitting, subtracts instrumental broadening,
+then uses the **Scherrer equation** and the **Williamson-Hall method** to give the crystallite size.
 
-两个标签页对应两种方法：
+Two tabs correspond to two methods:
 
-| 标签 | 方法 | 输出 |
+| Tab | Method | Output |
 |---|---|---|
-| ① 谢乐法 | D = K·λ/(β·cosθ)，逐峰计算 | 各峰 D、平均 D（三种统计口径） |
-| ② Williamson-Hall | UDM / USDM / UDEDM 三变体可切换 | 截距→D、斜率→ε/σ/√u、R² |
-| ③ 标样与仪器线宽 | Caglioti 分辨函数 | U/V/W、仪器线宽曲线、2θ 角度校正 |
-| ④ 方法对比 | 5 组 7 种方法横向对比 | 各方法 D、次级量、R²、状态与选型说明 |
+| ① Scherrer method | D = K·λ/(β·cosθ), peak-by-peak calculation | Per-peak D, average D (three statistical conventions) |
+| ② Williamson-Hall | Switchable among the UDM / USDM / UDEDM three variants | Intercept → D, slope → ε/σ/√u, R² |
+| ③ Standard & instrumental line width | Caglioti resolution function | U/V/W, instrumental line-width curve, 2θ angle correction |
+| ④ Method comparison | Side-by-side comparison of 5 groups / 7 methods | Per-method D, secondary quantity, R², status and selection notes |
 
-## 运行
+## Running
 
 ```bash
-python run.py                                  # 空界面，手动导入
-python run.py 样品.txt 标样.txt                 # 直接带文件启动
+python run.py                                  # empty UI, import manually
+python run.py sample.txt standard.txt           # launch directly with files
 python -m crysize.gui
 ```
 
-依赖：Python ≥ 3.10、numpy、scipy、matplotlib、PySide6（版本锁定见 `requirements.txt`）。
+Dependencies: Python ≥ 3.10, numpy, scipy, matplotlib, PySide6 (versions pinned in `requirements.txt`).
 
-界面与报告支持**三语**（简体中文 / English / 日本語），菜单「语言」运行时热切换，
-选择持久化到 `%USERPROFILE%/.crysize/config.json`。漏译键以 `⟪key⟫` 直接上界面，
-`tests/test_i18n.py` 在上线前拦截三语 key 集与格式占位符的不一致。
+The UI and reports are **trilingual** (Simplified Chinese / English / Japanese); the "Language" menu switches at runtime,
+and the choice is persisted to `%USERPROFILE%/.crysize/config.json`. Missing translation keys are shown directly in the UI as `⟪key⟫`;
+`tests/test_i18n.py` catches mismatches between the trilingual key sets and format placeholders before release.
 
-## 计算方法：5 组 7 种
+## Calculation methods: 5 groups / 7 methods
 
-侧栏「计算方法」下拉可切换主方法，标签页「方法对比」给出 7 种方法在同一组
-峰拟合结果上的横向对比。完整选型说明见 [`docs/METHODS.md`](docs/METHODS.md)。
+The "Calculation method" drop-down in the sidebar switches the main method, and the "Method comparison" tab gives a
+side-by-side comparison of the 7 methods on the same set of peak-fitting results. For full selection notes see [`docs/METHODS.md`](docs/METHODS.md).
 
-| 组 | 细分方法（7 种） | 主输出 | 次级量 | 额外输入 |
+| Group | Sub-methods (7) | Main output | Secondary quantity | Extra input |
 |---|---|---|---|---|
-| ① 谢乐法 | FWHM 口径（K=0.89）／积分宽度口径（K=1.0） | 数目平均 D | — | 标样（可选） |
-| ② W-H UDM | 均匀形变模型 | D | ε (%) | 标样（推荐） |
-| ③ W-H USDM | 均匀应力模型 | D | σ (MPa) | 标样 + a、c₁₁/c₁₂/c₄₄ |
-| ④ W-H UDEDM | 形变能密度模型 | D | u (MJ·m⁻³) | 同 ③ |
-| ⑤ Warren-Averbach | 单峰 Voigt 近似／多级反射傅里叶法 | D（体积加权） | ⟨ε²⟩^½ | 标样；傅里叶法还要 ≥3 峰且 d 值 ≥2 种 |
+| ① Scherrer method | FWHM convention (K=0.89) / integral-breadth convention (K=1.0) | Number-average D | — | Standard sample (optional) |
+| ② W-H UDM | Uniform deformation model | D | ε (%) | Standard sample (recommended) |
+| ③ W-H USDM | Uniform stress model | D | σ (MPa) | Standard sample + a, c₁₁/c₁₂/c₄₄ |
+| ④ W-H UDEDM | Uniform deformation energy density model | D | u (MJ·m⁻³) | Same as ③ |
+| ⑤ Warren-Averbach | Single-peak Voigt approximation / multi-order reflection Fourier method | D (volume-weighted) | ⟨ε²⟩^½ | Standard sample; the Fourier method additionally needs ≥3 peaks and ≥2 d values |
 
-「按晶向分组」是 ②③④ 共用的增强开关（按 Γ 分组后组内回归），需先填晶格
-参数完成指标化；若谱里没有同族高级次，程序自动退回不分组并注明。
+"Group by crystallographic direction" is an enhanced switch shared by ②③④ (regression within groups after grouping by Γ); it requires the lattice
+parameters to be filled in first to complete indexing; if the pattern has no higher-order reflections of the same family, the program automatically falls back to no grouping and notes it.
 
-三条使用边界：
+Three usage boundaries:
 
-1. **无弹性常数时 ②③④ 退化为同一条拟合线**（σ = εE、u = ε²E/2 只是重参数
-   化），界面标注「降级」。
-2. **口径不可混用**：谢乐两种口径 K 不同；单峰 W-A 与傅里叶 W-A 物理含义
-   不同；跨方法比数值大小没有意义。
-3. **无标样时**仪器宽化被计入尺寸，结果只作相对参考。
+1. **Without elastic constants, ②③④ collapse to the same fitted line** (σ = εE, u = ε²E/2 are merely re-parameterizations); the UI marks this as "degraded".
+2. **Conventions must not be mixed**: the two Scherrer conventions use different K; single-peak W-A and Fourier W-A have different physical meanings; comparing numerical magnitudes across methods is meaningless.
+3. **Without a standard sample**, instrumental broadening is folded into the size, so the result is only a relative reference.
 
-## 两个版次
+## Two editions
 
-| 版次 | 产物 | 打包命令 | 版次标识 |
+| Edition | Artifact | Build command | Edition marker |
 |---|---|---|---|
-| 内部评估版 | `dist/PolyXRD-CrySize-vX.Y.Z.exe`（单文件免安装） | `build_exe.bat` | 状态栏 + 关于框标「内部评估版本」（`installer/rthook_internal.py` 运行时覆写） |
-| 注册版 | `dist/PolyXRD-CrySize/PolyXRD-CrySize.exe`（onedir）+ `dist/PolyXRD-CrySize-vX.Y.Z-Setup.exe`（Inno Setup 安装包） | `build_setup.bat` | 无标识（`crysize/edition.py` 默认 `registered`），但**启用家族统一注册机制**（`crysize/registration.py`） |
+| Internal evaluation build | `dist/PolyXRD-CrySize-vX.Y.Z.exe` (single-file, no installation) | `build_exe.bat` | Status bar + About box marked "Internal Evaluation Build" (overridden at runtime by `installer/rthook_internal.py`) |
+| Registered edition | `dist/PolyXRD-CrySize/PolyXRD-CrySize.exe` (onedir) + `dist/PolyXRD-CrySize-vX.Y.Z-Setup.exe` (Inno Setup installer) | `build_setup.bat` | No marker (`crysize/edition.py` defaults to `registered`), but **enables the family-wide registration mechanism** (`crysize/registration.py`) |
 
-版次只影响标识显示与注册入口，不影响任何计算功能。两个 spec 共用同一份源码与
-`resources/`，差异仅在 onefile/onedir 与是否加 runtime hook。
+The edition only affects marker display and the registration entry point, not any calculation function. The two specs share the same source code and
+`resources/`; the only differences are onefile/onedir and whether a runtime hook is added.
 
-### 注册机制（注册版，自 v2.0.1 起）
+### Registration mechanism (registered edition, since v2.0.1)
 
-注册版接入 PolyXRD 家族统一注册机制（实现与 `PolyXRD-Reg` 完全一致，同一把
-密钥与 `PXRD1-` 注册码格式，可用家族 `PolyXRD-RegTool` 或本项目
-`tools/make_reg_code.py` 出码）：
+The registered edition connects to the PolyXRD family-wide registration mechanism (implementation identical to `PolyXRD-Reg`, the same
+key and `PXRD1-` registration code format; codes can be issued with the family `PolyXRD-RegTool` or this project's
+`tools/make_reg_code.py`):
 
-- **未注册**：每次启动弹窗提示版权声明与联系邮箱，点「确定」继续使用、下次仍提示；点「输入注册码」可立即注册。
-- **注册**：帮助菜单「输入注册码 (&R)…」粘贴注册码，校验通过即永久注册（状态存
-  `%APPDATA%/PolyXRD/Registration/CrySize.json`，每次启动重校验，手改无效）。
-- **状态栏**：最右侧右对齐显示「已注册：<单位部门名称>」或「未注册」。
-- **内部评估版**（单文件 exe）不启用该机制，仅居中红字标「内部评估版本」。
+- **Unregistered**: on every launch a pop-up shows the copyright notice and contact email; click "OK" to continue (it will prompt again next time); click "Enter Registration Code" to register immediately.
+- **Registered**: paste the registration code via Help menu "Enter Registration Code (&R)…"; once validation passes it is permanently registered (status stored in
+  `%APPDATA%/PolyXRD/Registration/CrySize.json`, re-validated on every launch; manual edits have no effect).
+- **Status bar**: the far right, right-aligned, shows "Registered: <Organization/Department Name>" or "Unregistered".
+- **Internal evaluation build** (single-file exe) does not enable this mechanism; it only shows centered red text "Internal Evaluation Build".
 
-出码（开发方）：
+Issuing codes (developer side):
 ```bash
-python tools/make_reg_code.py "清华大学材料学院"
+python tools/make_reg_code.py "School of Materials Science and Engineering, Tsinghua University"
 python tools/make_reg_code.py --verify PXRD1-XXXX-XXXX-XXXX-XXXX
 ```
 
-## 使用流程
+## Workflow
 
-1. **导入样品谱图**：两列文本（2θ, 强度），支持 `.txt .xy .dat .csv .asc .prn .raw` 等。
-   岛津/Rigaku/Bruker 的 ASCII 导出可直接读，程序会跳过表头并提取靶材、步长、扫描范围。
-2. **导入标样谱图**：与样品**同一天、同一狭缝、同一扫描速度**测的 Si 或 LaB₆。
-   这是仪器宽化校正的前提 —— 换狭缝、换靶、改计数时间后必须重测。
-3. 程序自动选强峰、拟合、计算。左侧峰表可勾选/取消峰，取消后自动重算。
-4. **导出报告**（自包含 HTML，浏览器打开可打印为 PDF）或 **CSV**。
+1. **Import the sample pattern**: two-column text (2θ, intensity), supporting `.txt .xy .dat .csv .asc .prn .raw`, etc.
+   ASCII exports from Shimadzu/Rigaku/Bruker can be read directly; the program skips the header and extracts target material, step size and scan range.
+2. **Import the standard pattern**: Si or LaB₆ measured on the **same day, with the same slit and the same scan speed** as the sample.
+   This is the prerequisite for instrumental broadening correction — after changing slit, target or counting time, it must be re-measured.
+3. The program automatically selects strong peaks, fits and calculates. Peaks can be checked/unchecked in the peak table on the left; unchecking triggers automatic recalculation.
+4. **Export a report** (self-contained HTML, open in a browser and print to PDF) or **CSV**.
 
-## 关键约定（影响数值，务必了解）
+## Key conventions (affect numerical results — read carefully)
 
-**1. 宽度口径与 K 值**
+**1. Width convention and K value**
 
-- Scherrer 用 **FWHM**，K = 0.89（球形晶体）
-- W-H 用 **积分宽度 β_int**，K = 1.0
+- Scherrer uses **FWHM**, K = 0.89 (spherical crystals)
+- W-H uses **integral breadth β_int**, K = 1.0
 
-依据：W-H 关系由积分宽度推导；且积分宽度在卷积下可加和（Stokes, Proc. Phys.
-Soc. A 61 (1948) 382），而 FWHM 不可加和。两者混用会引入 5%–20% 系统偏差。
-界面里切换口径会同步 K 的默认值，也可手动改。
+Rationale: the W-H relation is derived from integral breadth; and integral breadth is additive under convolution (Stokes, Proc. Phys.
+Soc. A 61 (1948) 382), whereas FWHM is not. Mixing the two introduces a 5%–20% systematic bias.
+Switching the convention in the UI updates the default K accordingly, and it can also be changed manually.
 
-**2. 仪器宽化扣除**
+**2. Instrumental broadening subtraction**
 
-- FWHM 口径：β = √(FWHM_obs² − FWHM_inst²)
-- 积分宽度口径：β = β_obs − β_inst
+- FWHM convention: β = √(FWHM_obs² − FWHM_inst²)
+- Integral-breadth convention: β = β_obs − β_inst
 
-仪器分辨函数用 Caglioti 形式 FWHM² = U·tan²θ + V·tanθ + W（Caglioti et al.,
-Nucl. Instr. 3 (1958) 223），由标样峰拟合得到；峰数不足或拟合质量差时自动退回
-实测点 PCHIP 插值，并在界面上注明实际用的是哪一种。
+The instrumental resolution function uses the Caglioti form FWHM² = U·tan²θ + V·tanθ + W (Caglioti et al.,
+Nucl. Instr. 3 (1958) 223), fitted from the standard peaks; when there are too few peaks or the fit quality is poor, it automatically falls back to
+PCHIP interpolation of the measured points, and the UI notes which one is actually used.
 
-**3. 2θ 角度校正**
+**3. 2θ angle correction**
 
-由标样实测峰位与 Si/LaB₆ 理论峰位（a_Si = 5.431194 Å，a_LaB₆ = 4.156826 Å）
-比较，自动校正零位偏移；偏差随 2θ 变化时追加 cosθ 项。校正后 Si 峰位残差通常
-在 0.005° 以内，d 值可直接与 PDF 卡片比对。
+By comparing the measured standard peak positions with the theoretical Si/LaB₆ peak positions (a_Si = 5.431194 Å, a_LaB₆ = 4.156826 Å),
+the zero offset is corrected automatically; when the deviation varies with 2θ, a cosθ term is added. After correction the Si peak-position residual is usually
+within 0.005°, and d values can be compared directly with PDF cards.
 
-**4. 选峰原则**
+**4. Peak-selection rules**
 
-选 **3–6 个孤立、无重叠、2θ 分布尽量宽**的强峰，而不是简单取最强峰：
+Select **3–6 strong peaks that are isolated, non-overlapping and spread as widely as possible in 2θ**, rather than simply taking the strongest peaks:
 
-- 重叠峰的 FWHM 会被邻峰污染（本程序在窗口内做多峰联合拟合来缓解，但重叠严重时
-  仍会给出不可靠宽度，此时该峰会被标记并从统计中剔除）
-- W-H 需要尽量多、角度跨度大的峰（建议 ≥5 个、跨度 ≥60°），否则拟合自由度不足
+- The FWHM of an overlapping peak is contaminated by neighbouring peaks (this program mitigates it with multi-peak joint fitting within the window, but severe overlap
+  still yields unreliable widths; in that case the peak is flagged and excluded from the statistics)
+- W-H needs as many peaks as possible with a wide angular span (recommend ≥5 peaks, span ≥60°), otherwise the fit has too few degrees of freedom
 
-**5. 没有标样时**
+**5. When there is no standard sample**
 
-程序照常计算，但结果会标注"未做仪器宽化校正"：这些 D 是**含仪器展宽的表观值，
-系统性偏小**，只能用于同仪器、同条件的样品之间相对比较。报告中以醒目警告条提示。
+The program computes as usual, but the result is marked "no instrumental broadening correction applied": these D values are **apparent values that include instrumental broadening and are
+systematically too small**, usable only for relative comparison between samples measured on the same instrument under the same conditions. The report shows a prominent warning bar.
 
-## 可靠量程
+## Reliable measurement range
 
-| 晶粒尺寸 | 可靠性 |
+| Crystallite size | Reliability |
 |---|---|
-| 2–100 nm | 主要适用区 |
-| 100–200 nm | 边缘，β 由两个相近宽度相减，不确定度急剧放大 |
-| > 200 nm | 失效（仪器宽化 ≥ 观测宽化，程序会标记并从平均中排除） |
+| 2–100 nm | Main applicable range |
+| 100–200 nm | Borderline; β is the difference of two similar widths, so uncertainty grows sharply |
+| > 200 nm | Invalid (instrumental broadening ≥ observed broadening; the program flags it and excludes it from the average) |
 
-W-H 法还假设宽化各向同性、应变均匀。若样品各向异性明显（片状/针状晶、层错），
-W-H 图会偏离直线，R² 显著下降，程序会给出提示。
+The W-H method also assumes isotropic broadening and uniform strain. If the sample is markedly anisotropic (plate-like/needle-like crystals, stacking faults),
+the W-H plot deviates from a straight line, R² drops noticeably, and the program gives a hint.
 
-## 输出
+## Output
 
-- **HTML 报告**：结论卡片、测量条件、各峰峰宽与 D、三种平均口径、仪器线宽系数
-  U/V/W（度² 与 rad² 两种单位）、W-H 图与数据点、方法与局限说明
-- **CSV**：峰表 + 汇总值，便于批量汇总
+- **HTML report**: conclusion card, measurement conditions, per-peak width and D, three averaging conventions, instrumental line-width coefficients
+  U/V/W (in both degree² and rad² units), W-H plot and data points, method and limitations notes
+- **CSV**: peak table + summary values, convenient for batch aggregation
 
-## 测试
+## Tests
 
 ```bash
-python -m pytest tests -q                       # 12 项核心算法测试
-python tools/smoke_gui.py 样品.txt 标样.txt      # GUI 冒烟：3 个标签页 + 两个对话框截图 + 出报告
-python tools/shot_report.py _smoke/report.html   # 把 HTML 报告整页渲染成 PNG，复核版式
+python -m pytest tests -q                       # 12 core algorithm tests
+python tools/smoke_gui.py sample.txt standard.txt  # GUI smoke: 3 tabs + two dialog screenshots + report generation
+python tools/shot_report.py _smoke/report.html   # render the whole HTML report page to PNG to review the layout
 ```
 
-测试用**正演-反演闭环**验证数学正确性：按谢乐方程生成已知晶粒尺寸的合成谱，
-再让程序反演，检查能否还原真值（20 nm、50 nm、无应变与含应变算例）。这条路径
-曾抓出两处真实缺陷：W-H 微应变被多除了一个 4（横轴已取 4sinθ）、以及"无标样时
-D 偏大"的方向写反 —— 说明闭环测试不是形式，是唯一的正确性判据。
+The tests use a **forward-inverse closed loop** to verify mathematical correctness: generate a synthetic pattern with a known crystallite size from the Scherrer equation,
+then let the program invert it and check whether it recovers the true value (20 nm, 50 nm, strain-free and strained cases). This path
+once caught two real defects: the W-H microstrain was divided by an extra 4 (the horizontal axis already used 4sinθ), and the direction of "D too large without a standard sample"
+was written backwards — showing that closed-loop testing is not a formality but the only correctness criterion.
 
-> GUI 冒烟与报告截图需要图形会话（`QT_QPA_PLATFORM=windows`）；纯离屏模式
-> 渲染不出中文字形，会得到一排"豆腐块"。
+> GUI smoke tests and report screenshots need a graphical session (`QT_QPA_PLATFORM=windows`); in pure offscreen mode
+> CJK glyphs cannot be rendered and you get a row of "tofu blocks".
 
-## 家族约定（PolyXRD）
+## Family conventions (PolyXRD)
 
-本工具是 PolyXRD 家族的一员（项目根 `D:\Project\XRD`），视觉与工程约定与家族
-其它工具一致，改任何一处都要与兄弟项目对齐：
+This tool is a member of the PolyXRD family (project root `D:\Project\XRD`); its visual and engineering conventions match the other family
+tools, and any change must be kept aligned with the sibling projects:
 
-| 项目 | 约定 |
+| Item | Convention |
 |---|---|
-| 视觉标识 | 白色正六边形 + 工具专属图形（此处为逐渐变宽的衍射峰与 FWHM 标注），品牌深色 `#0F172A` → 品牌蓝 `#0284C7` 斜向渐变，子工具强调色青 `#22D3EE` |
-| 启动画面 | `resources/splash-screen.png`（480×270），打包态由 PyInstaller `Splash` 在解包阶段先显示，主窗口 `show()` 后 `pyi_splash.close()` 交接；关闭定时器**必须**在 `show()` 之后挂，否则冷启动会闪退 |
-| 图标 | 窗口用 PNG（Qt6 内建解码，不加载 `qico.dll` 插件），`.ico` 只给 exe 资源与安装器 |
-| 风格 | Fusion 样式 + 局部内联样式 + `gui/theme.py` 统一配色，不用全局 QSS |
-| 字体 | Microsoft YaHei 9 pt |
-| i18n | `crysize/i18n/`（manager + 三语翻译表），接口与 RutAna 完全一致（`tr()` 缺键返回 `⟪key⟫` 不回退）；core 层警告/质量标记也经 `tr()` 生成，语言切换后主窗口自动重算刷新 |
-| 版次 | `crysize/edition.py`：`registered`（安装包，启用 `registration.py` 注册机制）或 `internal`（单文件 exe，状态栏标"内部评估版本"，由 `installer/rthook_internal.py` 覆写，不启用注册） |
-| 打包 | `build_exe.bat` → 单文件内部评估版；`build_setup.bat` → onedir + Inno Setup 注册版安装包 |
-| 许可 | 双许可：学术（非商业研究与教学）免费；商业用途须取得书面授权。条款见 `LICENSE` / `LICENSE-CN` |
-| 联系 | sshztx@outlook.com · https://github.com/PolyXRD |
+| Visual identity | White regular hexagon + tool-specific graphic (here a progressively broadening diffraction peak with FWHM annotation), diagonal gradient from brand dark `#0F172A` → brand blue `#0284C7`, sub-tool accent cyan `#22D3EE` |
+| Splash screen | `resources/splash-screen.png` (480×270); in the packaged build it is shown first by PyInstaller `Splash` during unpacking, then handed over via `pyi_splash.close()` after the main window `show()`; the close timer **must** be installed after `show()`, otherwise cold start crashes |
+| Icon | The window uses PNG (built-in Qt6 decoding, does not load the `qico.dll` plugin); `.ico` is only for exe resources and the installer |
+| Style | Fusion style + local inline styles + unified palette in `gui/theme.py`, no global QSS |
+| Font | Microsoft YaHei 9 pt |
+| i18n | `crysize/i18n/` (manager + trilingual translation tables); interface identical to RutAna (`tr()` returns `⟪key⟫` for missing keys, no fallback); core-layer warnings/quality flags are also generated via `tr()`, and the main window automatically recomputes and refreshes after a language switch |
+| Edition | `crysize/edition.py`: `registered` (installer, enables the `registration.py` registration mechanism) or `internal` (single-file exe, status bar marked "Internal Evaluation Build", overridden by `installer/rthook_internal.py`, no registration) |
+| Packaging | `build_exe.bat` → single-file internal evaluation build; `build_setup.bat` → onedir + Inno Setup registered-edition installer |
+| License | Dual license: academic (non-commercial research and teaching) free; commercial use requires written authorization. Terms in `LICENSE` / `LICENSE-CN` |
+| Contact | sshztx@outlook.com · https://github.com/PolyXRD |
 
-品牌图片由 `tools/build_artwork.py`（Pillow）生成，改配色或图形只需改这一个文件
-再跑一次，避免图标、启动图、logo、报告三处色差。
+Brand images are generated by `tools/build_artwork.py` (Pillow); to change the palette or graphic you only need to edit this one file
+and run it again, avoiding colour differences across the icon, splash screen, logo and report.
 
-## 目录
+## Directory layout
 
 ```
 crysize/
-  version.py      版本与产品标识（家族统一字段）
-  edition.py      版次标识（registered / internal）
-  registration.py 家族统一注册机制（注册版启用：未注册提示/输入注册码/状态栏单位名；密钥与 PolyXRD-Reg 一致）
-  i18n/           三语基础设施（manager + translations/zh_CN,en_US,ja_JP）
+  version.py      Version and product identity (family-wide fields)
+  edition.py      Edition flag (registered / internal)
+  registration.py Family-wide registration mechanism (enabled in registered edition: unregistered prompt / enter registration code / status-bar unit name; key identical to PolyXRD-Reg)
+  i18n/           Trilingual infrastructure (manager + translations/zh_CN,en_US,ja_JP)
   core/
-    pattern.py     谱图读取（表头跳过、元数据提取、降序翻转）
-    elasticity.py  立方晶系 hkl 指标化与方向杨氏模量 E(hkl)（USDM/UDEDM 用）
-    wh_models.py   W-H 三变体 UDM / USDM / UDEDM + 按 Γ 分组
-    warren.py      Warren-Averbach：单峰 Voigt 近似 + 多级反射傅里叶法
-    methods.py     5 组 7 种方法的注册表、统一结果与选型说明入口
-    peaks.py       峰搜索与自动选峰
-    profile.py     pseudo-Voigt 拟合（局部多峰、Kα₂ 剥离、质量标记）
-    instrument.py  仪器分辨函数（Caglioti / PCHIP）
-    standards.py   Si / LaB₆ 参考数据与角度校正
-    size.py        Scherrer 与 W-H 计算
-    analysis.py    编排层
+    pattern.py     Pattern reading (header skip, metadata extraction, descending flip)
+    elasticity.py  Cubic hkl indexing and directional Young's modulus E(hkl) (for USDM/UDEDM)
+    wh_models.py   W-H three variants UDM / USDM / UDEDM + grouping by Γ
+    warren.py      Warren-Averbach: single-peak Voigt approximation + multi-order reflection Fourier method
+    methods.py     Registry of 5 groups / 7 methods, unified result and selection-notes entry point
+    peaks.py       Peak search and automatic peak selection
+    profile.py     pseudo-Voigt fitting (local multi-peak, Kα₂ stripping, quality flags)
+    instrument.py  Instrumental resolution function (Caglioti / PCHIP)
+    standards.py   Si / LaB₆ reference data and angle correction
+    size.py        Scherrer and W-H calculation
+    analysis.py    Orchestration layer
   gui/
-    __main__.py    入口（启动图 → 主窗口 → 关闭启动图）
-    main_window.py 主窗口、参数面板、峰表、语言菜单
-    canvas.py      谱图/W-H/线宽曲线画布
-    report.py      HTML 报告（语言跟随界面）
-    dialogs.py     关于 / 版权与许可
-    theme.py       家族配色与字体常量
-    resources.py   资源定位（开发态 / sys._MEIPASS）
-resources/         品牌资产（build_artwork.py 生成）
-installer/         Inno Setup 脚本、中文语言文件、内部版 runtime hook
-tools/             build_artwork.py、smoke_gui.py、shot_report.py
-tests/             test_core.py（算法闭环）+ test_i18n.py（三语一致性）
-                   + test_methods.py（弹性/指标化、三变体、Warren-Averbach）
-docs/              METHODS.md（5 组 7 种方法的选择场景与文献依据）
-pyproject.toml     打包元数据（双许可 LicenseRef、版本单一来源、pytest/ruff 配置）
-PolyXRD-CrySize.spec / PolyXRD-CrySize-Setup.spec   PyInstaller 内部版 / 注册版
-build_exe.bat / build_setup.bat                    一键打包脚本
+    __main__.py    Entry point (splash → main window → close splash)
+    main_window.py Main window, parameter panel, peak table, language menu
+    canvas.py      Pattern / W-H / line-width curve canvas
+    report.py      HTML report (language follows the UI)
+    dialogs.py     About / copyright and license
+    theme.py       Family palette and font constants
+    resources.py   Resource location (dev mode / sys._MEIPASS)
+resources/         Brand assets (generated by build_artwork.py)
+installer/         Inno Setup script, Chinese language file, internal-edition runtime hook
+tools/             build_artwork.py, smoke_gui.py, shot_report.py
+tests/             test_core.py (algorithm closed loop) + test_i18n.py (trilingual consistency)
+                   + test_methods.py (elasticity/indexing, three variants, Warren-Averbach)
+docs/              METHODS.md (selection scenarios and literature basis for the 5 groups / 7 methods)
+pyproject.toml     Packaging metadata (dual-license LicenseRef, single source of version, pytest/ruff config)
+PolyXRD-CrySize.spec / PolyXRD-CrySize-Setup.spec   PyInstaller internal edition / registered edition
+build_exe.bat / build_setup.bat                    one-click build scripts
 ```
 
-> `pip install -e .` 需要 setuptools ≥ 77（PEP 639 的 `license` / `license-files`
-> 字段），与家族主程序 `PolyXRD/pyproject.toml` 同一写法；日常开发直接
-> `python run.py` 不需要安装。
+> `pip install -e .` requires setuptools ≥ 77 (the `license` / `license-files`
+> fields of PEP 639), the same style as the family main program `PolyXRD/pyproject.toml`; for day-to-day development just run
+> `python run.py` — no installation needed.
 
-## 参考
+## References
 
 - Scherrer, P. *Gött. Nachr.* **2** (1918) 98
 - Williamson, G. K.; Hall, W. H. *Acta Metall.* **1** (1953) 22
@@ -239,15 +237,15 @@ build_exe.bat / build_setup.bat                    一键打包脚本
 - Nye, J. F. *Physical Properties of Crystals*, Clarendon Press (1957)
 - Bindu, P.; Thomas, S. *J. Theor. Appl. Phys.* **8** (2014) 123
 
-## 许可与联系
+## License and contact
 
-© 2026 PolyXRD Team · 版权所有
+© 2026 PolyXRD Team · All rights reserved
 
-本软件按**双许可**发布：
+This software is released under a **dual license**:
 
-- **学术许可**：仅限非商业学术研究与教学，免费；可自由使用、复制、修改、分发，
-  不允许任何商业用途。
-- **商业许可**：商用前须联系版权持有人取得书面授权。
+- **Academic license**: for non-commercial academic research and teaching only, free; may be freely used, copied, modified and distributed,
+  with no commercial use permitted.
+- **Commercial license**: contact the copyright holder for written authorization before commercial use.
 
-完整条款见 `LICENSE`（英文）与 `LICENSE-CN`（中文）。商业授权与技术支持：
-sshztx@outlook.com。
+Full terms are in `LICENSE` (English) and `LICENSE-CN` (Chinese). For commercial licensing and technical support:
+sshztx@outlook.com.
